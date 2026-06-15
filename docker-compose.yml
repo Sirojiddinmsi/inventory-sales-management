@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-inventory_sales}
+      POSTGRES_USER: ${POSTGRES_USER:-inventory}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-inventory_password}
+      TZ: ${APP_TIMEZONE:-Asia/Tashkent}
+      PGTZ: ${APP_TIMEZONE:-Asia/Tashkent}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/001_initial_schema.sql:ro
+      - ./database/migrations/002_sales_archive_returns_images.sql:/docker-entrypoint-initdb.d/002_sales_archive_returns_images.sql:ro
+      - ./database/migrations/003_permanent_product_delete.sql:/docker-entrypoint-initdb.d/003_permanent_product_delete.sql:ro
+      - ./database/migrations/004_measurement_units.sql:/docker-entrypoint-initdb.d/004_measurement_units.sql:ro
+      - ./database/migrations/005_product_locations.sql:/docker-entrypoint-initdb.d/005_product_locations.sql:ro
+      - ./database/migrations/006_fifo_inventory.sql:/docker-entrypoint-initdb.d/006_fifo_inventory.sql:ro
+      - ./database/migrations/007_user_profile_management.sql:/docker-entrypoint-initdb.d/007_user_profile_management.sql:ro
+      - ./database/seeds/001_default_data.sql:/docker-entrypoint-initdb.d/007_default_data.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-inventory} -d ${POSTGRES_DB:-inventory_sales}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-inventory}:${POSTGRES_PASSWORD:-inventory_password}@db:5432/${POSTGRES_DB:-inventory_sales}
+      JWT_SECRET: ${JWT_SECRET:-change-this-development-secret-at-least-32-chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Tashkent}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-200}
+      TZ: ${APP_TIMEZONE:-Asia/Tashkent}
+    ports:
+      - "4000:4000"
+    volumes:
+      - product_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  product_uploads:
