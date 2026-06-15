@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { productService } from "./product.service.js";
+import { saveProductImages } from "./product.upload.js";
 
 export class ProductController {
   async list(req: Request, res: Response) {
@@ -29,8 +30,9 @@ export class ProductController {
 
   async uploadImages(req: Request, res: Response) {
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
     res.status(201).json({
-      urls: files.map((file) => `/uploads/products/${file.filename}`)
+      urls: await saveProductImages(files, baseUrl)
     });
   }
 
