@@ -873,7 +873,12 @@ td strong { color: #1e293b; font-size: 12px; }
   }
   .table-checkbox {
     width: 100%;
+    min-height: 44px;
     justify-content: flex-end;
+  }
+  .table-checkbox input {
+    width: 20px;
+    height: 20px;
   }
   .table-checkbox span {
     display: inline;

@@ -23,6 +23,29 @@ export class ProductController {
     res.status(204).send();
   }
 
+  async bulkDelete(req: Request, res: Response) {
+    res.json(await productService.bulkDelete(req.body.ids));
+  }
+
+  async bulkMove(req: Request, res: Response) {
+    res.json(await productService.bulkMove(req.body.ids, req.body.location));
+  }
+
+  async bulkChangeCategory(req: Request, res: Response) {
+    res.json(await productService.bulkChangeCategory(req.body.ids, req.body.categoryId));
+  }
+
+  async exportSelected(req: Request, res: Response) {
+    const buffer = await productService.exportSelected(req.body.ids);
+    res
+      .setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      )
+      .setHeader("Content-Disposition", 'attachment; filename="selected-products.xlsx"')
+      .send(buffer);
+  }
+
   async importRows(req: Request, res: Response) {
     res.status(201).json(await productService.importRows(req.body.rows, req.user!.id));
   }
