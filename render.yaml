@@ -5,8 +5,7 @@ services:
     plan: free
     region: frankfurt
     buildCommand: npm ci && npm run build --workspace @inventory/api
-    preDeployCommand: node scripts/bootstrap-db.mjs
-    startCommand: npm run start --workspace @inventory/api
+    startCommand: node scripts/bootstrap-db.mjs && npm run start --workspace @inventory/api
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

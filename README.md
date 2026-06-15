@@ -149,6 +149,7 @@ This repository now includes [render.yaml](render.yaml) for a three-part deploy:
 ### Blueprint notes
 
 - Render will prompt for `JWT_SECRET` because it is marked with `sync: false`.
+- The API service runs `scripts/bootstrap-db.mjs` at startup, so migrations and seed SQL apply automatically before the server starts.
 - The Blueprint sets `CORS_ORIGIN=*` for the first deploy so the frontend can reach the API immediately.
 - After the first deploy, tighten `CORS_ORIGIN` to your actual frontend domain in the API service settings, for example:
 
