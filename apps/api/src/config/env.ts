@@ -10,10 +10,7 @@ const envSchema = z.object({
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   APP_TIMEZONE: z.string().default("Asia/Tashkent"),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(900000),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(200),
-  IMAGEKIT_PUBLIC_KEY: z.string().optional(),
-  IMAGEKIT_PRIVATE_KEY: z.string().optional(),
-  IMAGEKIT_URL_ENDPOINT: z.string().url().optional()
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(200)
 });
 
 const parsed = envSchema.safeParse(process.env);
