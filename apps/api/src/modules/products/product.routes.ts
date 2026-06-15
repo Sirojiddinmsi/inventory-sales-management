@@ -5,7 +5,11 @@ import { validate } from "../../shared/validation.js";
 import { idParamSchema } from "../categories/category.schema.js";
 import { productController } from "./product.controller.js";
 import {
+  productBulkCategorySchema,
+  productBulkDeleteSchema,
+  productBulkLocationSchema,
   productCreateSchema,
+  productExportSelectedSchema,
   productImportSchema,
   productListSchema,
   productUpdateSchema
@@ -16,6 +20,27 @@ export const productRouter = Router();
 
 productRouter.get("/", validate(productListSchema, "query"), asyncHandler(productController.list));
 productRouter.get("/import-template.xlsx", asyncHandler(productController.importTemplate));
+productRouter.post(
+  "/export-selected.xlsx",
+  validate(productExportSelectedSchema),
+  asyncHandler(productController.exportSelected)
+);
+productRouter.post(
+  "/bulk-location",
+  validate(productBulkLocationSchema),
+  asyncHandler(productController.bulkMove)
+);
+productRouter.post(
+  "/bulk-category",
+  validate(productBulkCategorySchema),
+  asyncHandler(productController.bulkChangeCategory)
+);
+productRouter.post(
+  "/bulk-delete",
+  authorize("ADMIN"),
+  validate(productBulkDeleteSchema),
+  asyncHandler(productController.bulkDelete)
+);
 productRouter.get(
   "/:id/history/export.xlsx",
   validate(idParamSchema, "params"),

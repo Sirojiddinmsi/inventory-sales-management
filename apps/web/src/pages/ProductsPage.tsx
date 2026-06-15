@@ -8,7 +8,9 @@ import {
   Edit3,
   FileSpreadsheet,
   History,
+  MapPin,
   Plus,
+  Tags,
   Trash2,
   Upload,
   X
@@ -33,7 +35,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
-import { api, download } from "../lib/api";
+import { api, download, downloadPost } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
 import type {
   Category,
@@ -130,6 +132,12 @@ export function ProductsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [deleting, setDeleting] = useState<Product | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkLocation, setBulkLocation] = useState("");
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [form, setForm] = useState<ProductForm>(emptyForm);
   const [importOpen, setImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
@@ -148,6 +156,7 @@ export function ProductsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const previewTouchStartX = useRef<number | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const categories = useQuery({
@@ -178,8 +187,21 @@ export function ProductsPage() {
       }),
     enabled: Boolean(historyProduct)
   });
+  const visibleProductIds = products.data?.data.map((product) => product.id) ?? [];
+  const selectedCount = selectedProductIds.length;
+  const visibleSelectedCount = visibleProductIds.filter((id) =>
+    selectedProductIds.includes(id)
+  ).length;
+  const allVisibleSelected =
+    visibleProductIds.length > 0 && visibleSelectedCount === visibleProductIds.length;
 
   useEffect(() => setPage(1), [search, categoryId, locationFilter, lowStock]);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate =
+        visibleSelectedCount > 0 && !allVisibleSelected;
+    }
+  }, [allVisibleSelected, visibleSelectedCount]);
   useEffect(() => {
     if (searchParams.get("import") === "1") {
       setImportOpen(true);
@@ -248,6 +270,61 @@ export function ProductsPage() {
     onSuccess: () => {
       toast.success("Mahsulot butunlay o‘chirildi");
       setDeleting(null);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: () =>
+      api<{ deleted: number }>("/products/bulk-delete", {
+        method: "POST",
+        body: JSON.stringify({ ids: selectedProductIds })
+      }),
+    onSuccess: (result) => {
+      toast.success(`${result.deleted} ta mahsulot butunlay o'chirildi`);
+      setBulkDeleteOpen(false);
+      setSelectedProductIds([]);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const bulkMove = useMutation({
+    mutationFn: () =>
+      api<{ updated: number }>("/products/bulk-location", {
+        method: "POST",
+        body: JSON.stringify({
+          ids: selectedProductIds,
+          location: bulkLocation.trim()
+        })
+      }),
+    onSuccess: (result) => {
+      toast.success(`${result.updated} ta mahsulot joylashuvi yangilandi`);
+      setBulkMoveOpen(false);
+      setBulkLocation("");
+      setSelectedProductIds([]);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const bulkChangeCategory = useMutation({
+    mutationFn: () =>
+      api<{ updated: number }>("/products/bulk-category", {
+        method: "POST",
+        body: JSON.stringify({
+          ids: selectedProductIds,
+          categoryId: bulkCategoryId
+        })
+      }),
+    onSuccess: (result) => {
+      toast.success(`${result.updated} ta mahsulot kategoriyasi yangilandi`);
+      setBulkCategoryOpen(false);
+      setBulkCategoryId("");
+      setSelectedProductIds([]);
       void queryClient.invalidateQueries({ queryKey: ["products"] });
     },
     onError: (error) => toast.error(error.message)
@@ -457,6 +534,30 @@ export function ProductsPage() {
       toast.error(error instanceof Error ? error.message : "Export xatosi");
     }
   };
+  const exportSelected = async () => {
+    try {
+      await downloadPost(
+        "/products/export-selected.xlsx",
+        "tanlangan-mahsulotlar.xlsx",
+        { ids: selectedProductIds }
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export xatosi");
+    }
+  };
+  const toggleProductSelection = (productId: string, checked: boolean) => {
+    setSelectedProductIds((current) =>
+      checked
+        ? [...new Set([...current, productId])]
+        : current.filter((id) => id !== productId)
+    );
+  };
+  const toggleSelectAllVisible = (checked: boolean) => {
+    setSelectedProductIds((current) => {
+      if (checked) return [...new Set([...current, ...visibleProductIds])];
+      return current.filter((id) => !visibleProductIds.includes(id));
+    });
+  };
 
   return (
     <>
@@ -477,6 +578,32 @@ export function ProductsPage() {
       />
 
       <Card>
+        {selectedCount > 0 && (
+          <div className="bulk-action-bar">
+            <strong>
+              {selectedCount} {tr("ta mahsulot tanlandi", "товаров выбрано")}
+            </strong>
+            <div className="bulk-action-buttons">
+              {user?.role === "ADMIN" && (
+                <Button variant="danger" onClick={() => setBulkDeleteOpen(true)}>
+                  <Trash2 size={16} /> {tr("Tanlanganlarni o'chirish", "Удалить выбранные")}
+                </Button>
+              )}
+              <Button variant="secondary" onClick={() => setBulkMoveOpen(true)}>
+                <MapPin size={16} /> {tr("Ko'chirish", "Переместить")}
+              </Button>
+              <Button variant="secondary" onClick={() => setBulkCategoryOpen(true)}>
+                <Tags size={16} /> {tr("Kategoriyani almashtirish", "Изменить категорию")}
+              </Button>
+              <Button variant="secondary" onClick={() => void exportSelected()}>
+                <Download size={16} /> {tr("Tanlanganlarni export", "Экспорт выбранных")}
+              </Button>
+              <Button variant="ghost" onClick={() => setSelectedProductIds([])}>
+                <X size={16} /> {tr("Tanlovni tozalash", "Сбросить выбор")}
+              </Button>
+            </div>
+          </div>
+        )}
         <div className="filters">
           <SearchInput
             value={search}
@@ -508,10 +635,19 @@ export function ProductsPage() {
         <DataTable
           loading={products.isLoading}
           empty={!products.data?.data.length}
-          minWidth={980}
+          minWidth={1040}
         >
           <thead>
             <tr>
+              <th className="checkbox-column">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={(event) => toggleSelectAllVisible(event.target.checked)}
+                  aria-label={tr("Ko'rinib turganlarning barchasini tanlash", "Выбрать все видимые")}
+                />
+              </th>
               <th>{tr("Mahsulot", "Товар")}</th>
               <th>{tr("Kategoriya", "Категория")}</th>
               <th>{tr("Joylashuv", "Место")}</th>
@@ -524,7 +660,23 @@ export function ProductsPage() {
           </thead>
           <tbody>
             {products.data?.data.map((product) => (
-              <tr key={product.id}>
+              <tr
+                key={product.id}
+                className={selectedProductIds.includes(product.id) ? "table-row-selected" : ""}
+              >
+                <td data-label={tr("Tanlash", "Выбор")} className="checkbox-cell">
+                  <label className="table-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedProductIds.includes(product.id)}
+                      onChange={(event) =>
+                        toggleProductSelection(product.id, event.target.checked)
+                      }
+                      aria-label={`${product.name} ${tr("tanlash", "выбрать")}`}
+                    />
+                    <span>{tr("Tanlash", "Выбрать")}</span>
+                  </label>
+                </td>
                 <td data-label={tr("Mahsulot", "Товар")}>
                   <div className="product-cell">
                     <span className={`product-avatar ${product.image_url ? "product-avatar-photo" : ""}`}>
@@ -770,6 +922,84 @@ export function ProductsPage() {
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
       />
+
+      <ConfirmDialog
+        open={bulkDeleteOpen}
+        title={tr("Tanlangan mahsulotlarni o'chirish", "Удалить выбранные товары")}
+        message={tr(
+          `${selectedCount} ta mahsulotni butunlay o'chirasizmi? Sotuvga bog'langan mahsulot bo'lsa, hech biri o'chirilmaydi.`,
+          `Удалить выбранные товары (${selectedCount}) навсегда? Если хотя бы один товар связан с продажей, удаление не будет выполнено.`
+        )}
+        loading={bulkDelete.isPending}
+        onCancel={() => setBulkDeleteOpen(false)}
+        onConfirm={() => bulkDelete.mutate()}
+      />
+
+      <Modal
+        open={bulkMoveOpen}
+        title={tr("Tanlangan mahsulotlarni ko'chirish", "Переместить выбранные товары")}
+        description={tr(
+          `${selectedCount} ta mahsulot uchun yangi polka yoki yashikni kiriting.`,
+          `Укажите новую полку или ящик для выбранных товаров (${selectedCount}).`
+        )}
+        onClose={() => setBulkMoveOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkMoveOpen(false)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={bulkMove.isPending}
+              disabled={!bulkLocation.trim()}
+              onClick={() => bulkMove.mutate()}
+            >
+              <MapPin size={16} /> {tr("Ko'chirish", "Переместить")}
+            </Button>
+          </>
+        }
+      >
+        <Input
+          label={tr("Yangi joylashuv", "Новое расположение")}
+          value={bulkLocation}
+          onChange={(event) => setBulkLocation(event.target.value)}
+          placeholder={tr("Masalan: Polka B3 / Yashik 25", "Например: Полка B3 / Ящик 25")}
+        />
+      </Modal>
+
+      <Modal
+        open={bulkCategoryOpen}
+        title={tr("Kategoriyani almashtirish", "Изменить категорию")}
+        description={tr(
+          `${selectedCount} ta mahsulot uchun yangi kategoriya tanlang.`,
+          `Выберите новую категорию для товаров (${selectedCount}).`
+        )}
+        onClose={() => setBulkCategoryOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBulkCategoryOpen(false)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={bulkChangeCategory.isPending}
+              disabled={!bulkCategoryId}
+              onClick={() => bulkChangeCategory.mutate()}
+            >
+              <Tags size={16} /> {tr("Almashtirish", "Изменить")}
+            </Button>
+          </>
+        }
+      >
+        <Select
+          label={tr("Yangi kategoriya", "Новая категория")}
+          value={bulkCategoryId}
+          onChange={(event) => setBulkCategoryId(event.target.value)}
+        >
+          <option value="">{tr("Kategoriya tanlang", "Выберите категорию")}</option>
+          {categories.data?.data.map((category) => (
+            <option key={category.id} value={category.id}>{category.name}</option>
+          ))}
+        </Select>
+      </Modal>
 
       <Modal
         open={Boolean(historyProduct)}

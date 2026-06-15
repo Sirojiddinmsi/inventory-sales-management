@@ -105,6 +105,17 @@ export class ProductRepository {
     return result.rows[0] ?? null;
   }
 
+  async findManyByIds(ids: string[]) {
+    if (ids.length === 0) return [];
+    const result = await query(
+      `SELECT ${productColumns} ${productFrom}
+       WHERE p.id = ANY($1::uuid[]) AND p.is_active = TRUE
+       ORDER BY p.name ASC`,
+      [ids]
+    );
+    return result.rows;
+  }
+
   async history(
     id: string,
     filter: {
@@ -457,6 +468,99 @@ export class ProductRepository {
     });
   }
 
+  async bulkPermanentDelete(ids: string[]) {
+    return withTransaction(async (client) => {
+      const productsResult = await client.query<{ id: string; name: string }>(
+        `SELECT id, name
+         FROM products
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         FOR UPDATE`,
+        [ids]
+      );
+      this.ensureAllProductsFound(ids, productsResult.rows);
+
+      const saleItemsResult = await client.query<{
+        product_id: string;
+        product_name: string;
+      }>(
+        `SELECT DISTINCT si.product_id, p.name AS product_name
+         FROM sale_items si
+         JOIN products p ON p.id = si.product_id
+         WHERE si.product_id = ANY($1::uuid[])`,
+        [ids]
+      );
+
+      if (saleItemsResult.rows.length > 0) {
+        throw new AppError(
+          409,
+          "Tanlangan mahsulotlardan ayrimlari sotuv nakladnoylarida mavjud. Avval bog'liq sotuvlarni butunlay o'chiring.",
+          "PRODUCTS_HAVE_SALES",
+          saleItemsResult.rows
+        );
+      }
+
+      await client.query("DELETE FROM purchases WHERE product_id = ANY($1::uuid[])", [ids]);
+      await client.query("DELETE FROM products WHERE id = ANY($1::uuid[])", [ids]);
+
+      return {
+        deleted: productsResult.rows.length,
+        products: productsResult.rows
+      };
+    });
+  }
+
+  async bulkUpdateLocation(ids: string[], location: string) {
+    return withTransaction(async (client) => {
+      const productsResult = await client.query<{ id: string }>(
+        `SELECT id
+         FROM products
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         FOR UPDATE`,
+        [ids]
+      );
+      this.ensureAllProductsFound(ids, productsResult.rows);
+
+      const result = await client.query<{ id: string }>(
+        `UPDATE products
+         SET location = $2
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         RETURNING id`,
+        [ids, location]
+      );
+      return { updated: result.rows.length };
+    });
+  }
+
+  async bulkUpdateCategory(ids: string[], categoryId: string) {
+    return withTransaction(async (client) => {
+      const categoryResult = await client.query<{ id: string }>(
+        "SELECT id FROM categories WHERE id = $1",
+        [categoryId]
+      );
+      if (!categoryResult.rows[0]) {
+        throw new AppError(404, "Category not found", "CATEGORY_NOT_FOUND");
+      }
+
+      const productsResult = await client.query<{ id: string }>(
+        `SELECT id
+         FROM products
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         FOR UPDATE`,
+        [ids]
+      );
+      this.ensureAllProductsFound(ids, productsResult.rows);
+
+      const result = await client.query<{ id: string }>(
+        `UPDATE products
+         SET category_id = $2
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         RETURNING id`,
+        [ids, categoryId]
+      );
+      return { updated: result.rows.length };
+    });
+  }
+
   async importRows(rows: ProductImportRow[], createdBy: string) {
     return withTransaction(async (client) => {
       const duplicateCodes = rows
@@ -679,6 +783,19 @@ export class ProductRepository {
       );
     }
     return found.name;
+  }
+
+  private ensureAllProductsFound(
+    requestedIds: string[],
+    products: Array<{ id: string }>
+  ) {
+    if (products.length !== requestedIds.length) {
+      throw new AppError(
+        404,
+        "Tanlangan mahsulotlardan ayrimlari topilmadi",
+        "PRODUCTS_NOT_FOUND"
+      );
+    }
   }
 
   private generateCode() {

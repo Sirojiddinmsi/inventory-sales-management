@@ -33,6 +33,30 @@ export const productCreateSchema = z.object({
 
 export const productUpdateSchema = productCreateSchema.partial();
 
+const productIds = z
+  .array(z.uuid())
+  .min(1)
+  .max(500)
+  .transform((ids) => [...new Set(ids)]);
+
+export const productBulkDeleteSchema = z.object({
+  ids: productIds
+});
+
+export const productBulkLocationSchema = z.object({
+  ids: productIds,
+  location: z.string().trim().min(1).max(120)
+});
+
+export const productBulkCategorySchema = z.object({
+  ids: productIds,
+  categoryId: z.uuid()
+});
+
+export const productExportSelectedSchema = z.object({
+  ids: productIds
+});
+
 export const productImportSchema = z.object({
   rows: z.array(
     z.object({

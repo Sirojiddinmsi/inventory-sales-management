@@ -33,6 +33,74 @@ export class ProductService {
     if (!product) throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");
   }
 
+  bulkDelete(ids: string[]) {
+    return productRepository.bulkPermanentDelete(ids);
+  }
+
+  bulkMove(ids: string[], location: string) {
+    return productRepository.bulkUpdateLocation(ids, location);
+  }
+
+  bulkChangeCategory(ids: string[], categoryId: string) {
+    return productRepository.bulkUpdateCategory(ids, categoryId);
+  }
+
+  async exportSelected(ids: string[]) {
+    const products = await productRepository.findManyByIds(ids);
+    if (products.length !== ids.length) {
+      throw new AppError(
+        404,
+        "Tanlangan mahsulotlardan ayrimlari topilmadi",
+        "PRODUCTS_NOT_FOUND"
+      );
+    }
+
+    const header = (value: string) => ({
+      value,
+      fontWeight: "bold" as const,
+      backgroundColor: "#DBEAFE",
+      wrap: true
+    });
+    const rows = [
+      [
+        header("Mahsulot"),
+        header("Kategoriya"),
+        header("Joylashuv"),
+        header("Birlik"),
+        header("Kirim narxi"),
+        header("Tavsiya sotuv narxi"),
+        header("Qoldiq"),
+        header("Minimal qoldiq"),
+        header("Tavsif")
+      ],
+      ...products.map((product) => [
+        String(product.name),
+        String(product.category_name),
+        String(product.location ?? ""),
+        String(product.unit),
+        Number(product.purchase_price),
+        Number(product.sale_price),
+        Number(product.stock_quantity),
+        Number(product.minimum_stock),
+        String(product.description ?? "")
+      ])
+    ];
+
+    return writeXlsxFile(rows, {
+      columns: [
+        { width: 32 },
+        { width: 20 },
+        { width: 20 },
+        { width: 12 },
+        { width: 18 },
+        { width: 22 },
+        { width: 14 },
+        { width: 18 },
+        { width: 40 }
+      ]
+    }).toBuffer();
+  }
+
   importRows(
     rows: Parameters<typeof productRepository.importRows>[0],
     userId: string

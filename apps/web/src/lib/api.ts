@@ -94,3 +94,37 @@ export async function download(path: string, filename: string, params?: Record<s
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+export async function downloadPost(
+  path: string,
+  filename: string,
+  body: Record<string, unknown>
+) {
+  const token = getToken();
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errorBody = (await response.json().catch(() => ({}))) as ApiErrorBody;
+    throw new ApiError(
+      response.status,
+      errorBody.error?.message ?? "Faylni yuklab bo'lmadi",
+      errorBody.error?.code,
+      errorBody.error?.details
+    );
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
