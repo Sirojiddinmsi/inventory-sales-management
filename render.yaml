@@ -32,7 +32,6 @@ services:
   - type: web
     name: tikuv-market-web
     runtime: static
-    plan: free
     buildCommand: npm ci && npm run build --workspace @inventory/web
     staticPublishPath: ./apps/web/dist
     envVars:
