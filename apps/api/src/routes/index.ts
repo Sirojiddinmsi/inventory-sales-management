@@ -1,0 +1,31 @@
+import { Router } from "express";
+import { authenticate } from "../middlewares/auth.middleware.js";
+import { authRouter } from "../modules/auth/auth.routes.js";
+import { categoryRouter } from "../modules/categories/category.routes.js";
+import { contactRouter } from "../modules/contacts/contact.routes.js";
+import { dashboardRouter } from "../modules/dashboard/dashboard.routes.js";
+import { debtRouter } from "../modules/debts/debt.routes.js";
+import { expenseRouter } from "../modules/expenses/expense.routes.js";
+import { productRouter } from "../modules/products/product.routes.js";
+import { purchaseRouter } from "../modules/purchases/purchase.routes.js";
+import { reportRouter } from "../modules/reports/report.routes.js";
+import { saleRouter } from "../modules/sales/sale.routes.js";
+import { settingsRouter } from "../modules/settings/settings.routes.js";
+import { unitRouter } from "../modules/units/unit.routes.js";
+
+export const apiRouter = Router();
+
+apiRouter.use("/auth", authRouter);
+apiRouter.use(authenticate);
+apiRouter.use("/dashboard", dashboardRouter);
+apiRouter.use("/products", productRouter);
+apiRouter.use("/categories", categoryRouter);
+apiRouter.use("/suppliers", contactRouter);
+apiRouter.use("/customers", contactRouter);
+apiRouter.use("/purchases", purchaseRouter);
+apiRouter.use("/sales", saleRouter);
+apiRouter.use("/debts", debtRouter);
+apiRouter.use("/expenses", expenseRouter);
+apiRouter.use("/reports", reportRouter);
+apiRouter.use("/settings", settingsRouter);
+apiRouter.use("/units", unitRouter);
