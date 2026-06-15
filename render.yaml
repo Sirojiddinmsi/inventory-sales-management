@@ -21,7 +21,7 @@ services:
       - key: JWT_EXPIRES_IN
         value: 1d
       - key: CORS_ORIGIN
-        value: "*"
+        value: https://tikuv-market-web.onrender.com
       - key: APP_TIMEZONE
         value: Asia/Tashkent
       - key: RATE_LIMIT_WINDOW_MS
