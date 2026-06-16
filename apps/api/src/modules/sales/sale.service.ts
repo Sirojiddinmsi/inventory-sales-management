@@ -170,6 +170,30 @@ export class SaleService {
     );
     document.y += 88;
 
+    if (sale.note) {
+      const noteY = document.y;
+      document
+        .save()
+        .roundedRect(document.page.margins.left, noteY, pageWidth, 54, 10)
+        .fillAndStroke("#F8FAFC", "#CBD5E1")
+        .restore();
+      document
+        .font("ReceiptBold")
+        .fontSize(10)
+        .fillColor("#475569")
+        .text("Izoh:", document.page.margins.left + 12, noteY + 10);
+      document
+        .font("ReceiptRegular")
+        .fontSize(9)
+        .fillColor("#0F172A")
+        .text(String(sale.note), document.page.margins.left + 12, noteY + 24, {
+          width: pageWidth - 24,
+          height: 20,
+          ellipsis: true
+        });
+      document.y = noteY + 68;
+    }
+
     let y = document.y;
     y = drawRow(columns.map((column) => column.title), y, { header: true });
     for (const item of sale.items) {
