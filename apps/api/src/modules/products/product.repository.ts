@@ -83,6 +83,7 @@ export class ProductRepository {
     };
     const orderBy = allowedSort[input.sortBy] ?? "p.created_at";
     const direction = input.sortOrder === "asc" ? "ASC" : "DESC";
+    const secondaryDirection = input.sortBy === "created_at" ? direction : "ASC";
     values.push(input.limit, (input.page - 1) * input.limit);
 
     const result = await query(
@@ -90,7 +91,7 @@ export class ProductRepository {
          COUNT(*) OVER()::int AS total_count
        ${productFrom}
        WHERE ${conditions.join(" AND ")}
-       ORDER BY ${orderBy} ${direction}
+       ORDER BY ${orderBy} ${direction}, p.id ${secondaryDirection}
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values
     );

@@ -58,6 +58,72 @@ type SaleLine = {
   discount: string;
 };
 
+const FRACTIONAL_UNIT_NAMES = new Set([
+  "kg",
+  "kq",
+  "кг",
+  "g",
+  "gr",
+  "гр",
+  "l",
+  "л",
+  "liter",
+  "litre",
+  "литр",
+  "m",
+  "metr",
+  "meter",
+  "метр",
+  "рулон"
+]);
+
+function normalizeNumericInput(value: string, allowFraction: boolean) {
+  const normalized = value.replace(/\s+/g, "").replace(/,/g, ".");
+  if (!allowFraction) {
+    return normalized.replace(/[^\d]/g, "");
+  }
+
+  let result = "";
+  let hasDot = false;
+  for (const char of normalized) {
+    if (/\d/.test(char)) {
+      result += char;
+      continue;
+    }
+    if (char === "." && !hasDot) {
+      result += char;
+      hasDot = true;
+    }
+  }
+  return result;
+}
+
+function allowsFractionalQuantity(unit: string, baseUnit?: string) {
+  const normalizedUnit = unit.trim().toLowerCase();
+  const normalizedBaseUnit = baseUnit?.trim().toLowerCase() ?? "";
+  if (normalizedUnit === "шт" || normalizedBaseUnit === "шт") return false;
+  return FRACTIONAL_UNIT_NAMES.has(normalizedUnit) || FRACTIONAL_UNIT_NAMES.has(normalizedBaseUnit);
+}
+
+function quantityInputProps(unit: string, baseUnit?: string) {
+  const fractional = allowsFractionalQuantity(unit, baseUnit);
+  return {
+    min: fractional ? "0.001" : "1",
+    step: fractional ? "0.001" : "1",
+    inputMode: fractional ? "decimal" : "numeric"
+  } as const;
+}
+
+function sanitizeQuantityValue(value: string, unit: string, baseUnit?: string) {
+  return normalizeNumericInput(value, allowsFractionalQuantity(unit, baseUnit));
+}
+
+function truncateNote(note: string, maxLength = 72) {
+  const compact = note.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength - 1)}…`;
+}
+
 const newLine = (): SaleLine => ({
   key: crypto.randomUUID(),
   productId: "",
@@ -417,10 +483,25 @@ export function SalesPage() {
         }
         if (field === "unit") {
           const product = productById.get(line.productId);
+          const nextQuantity = sanitizeQuantityValue(line.quantity, value, product?.unit);
           return {
             ...line,
             unit: value,
+            quantity: nextQuantity,
             unitMultiplier: value === product?.unit ? "1" : ""
+          };
+        }
+        if (field === "quantity") {
+          const product = productById.get(line.productId);
+          return {
+            ...line,
+            quantity: sanitizeQuantityValue(value, line.unit, product?.unit)
+          };
+        }
+        if (field === "unitMultiplier") {
+          return {
+            ...line,
+            unitMultiplier: normalizeNumericInput(value, true)
           };
         }
         return { ...line, [field]: value };
@@ -576,6 +657,11 @@ export function SalesPage() {
                     <div>
                       <strong>{sale.invoice_number}</strong>
                       {sale.returned_amount > 0 && <small>Qaytarish: {money(sale.returned_amount)}</small>}
+                      {sale.note && (
+                        <small className="invoice-note-preview" title={sale.note}>
+                          {tr("Izoh", "Примечание")}: {truncateNote(sale.note)}
+                        </small>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -699,6 +785,7 @@ export function SalesPage() {
             <div className="sale-lines">
               {lines.map((line, index) => {
                 const product = productById.get(line.productId);
+                const quantityProps = quantityInputProps(line.unit, product?.unit);
                 return (
                   <div className="sale-line" key={line.key}>
                     <span className="line-number">{index + 1}</span>
@@ -727,8 +814,9 @@ export function SalesPage() {
                       <div className="sale-quantity-main">
                         <Input
                           type="number"
-                          min="0.001"
-                          step="0.001"
+                          min={quantityProps.min}
+                          step={quantityProps.step}
+                          inputMode={quantityProps.inputMode}
                           value={line.quantity}
                           onChange={(event) => updateLine(line.key, "quantity", event.target.value)}
                           placeholder={tr("Miqdor", "Количество")}
