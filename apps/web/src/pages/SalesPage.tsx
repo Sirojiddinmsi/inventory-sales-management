@@ -99,6 +99,8 @@ export function SalesPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [productPickerLineKey, setProductPickerLineKey] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState("");
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
+  const [selectedProducts, setSelectedProducts] = useState<Record<string, Product>>({});
   const productSearchRef = useRef<HTMLInputElement | null>(null);
 
   const sales = useQuery({
@@ -116,10 +118,17 @@ export function SalesPage() {
     })
   });
   const products = useQuery({
-    queryKey: ["products", "sale-select"],
+    queryKey: ["products", "sale-select", debouncedProductSearch],
     queryFn: () => api<Paginated<Product>>("/products", {
-      params: { limit: 100, sortBy: "name", sortOrder: "asc" }
-    })
+      params: {
+        limit: 100,
+        search: debouncedProductSearch,
+        sortBy: "name",
+        sortOrder: "asc"
+      }
+    }),
+    enabled: modalOpen || Boolean(productPickerLineKey),
+    staleTime: 30_000
   });
   const units = useQuery({
     queryKey: ["units"],
@@ -139,6 +148,16 @@ export function SalesPage() {
     const timer = window.setTimeout(() => productSearchRef.current?.focus(), 40);
     return () => window.clearTimeout(timer);
   }, [productPickerLineKey]);
+  useEffect(() => {
+    if (!productPickerLineKey) {
+      setDebouncedProductSearch("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedProductSearch(productSearch.trim());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [productPickerLineKey, productSearch]);
 
   const subtotal = useMemo(
     () => lines.reduce(
@@ -152,6 +171,12 @@ export function SalesPage() {
   const selectedPickerLine = productPickerLineKey
     ? lines.find((line) => line.key === productPickerLineKey) ?? null
     : null;
+  const productById = useMemo(() => {
+    const map = new Map<string, Product>();
+    Object.values(selectedProducts).forEach((product) => map.set(product.id, product));
+    (products.data?.data ?? []).forEach((product) => map.set(product.id, product));
+    return map;
+  }, [products.data?.data, selectedProducts]);
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     const items = products.data?.data ?? [];
@@ -288,6 +313,7 @@ export function SalesPage() {
 
   const resetForm = () => {
     setLines([newLine()]);
+    setSelectedProducts({});
     setCustomerId("");
     setCustomerName("");
     setCustomerPhone("");
@@ -308,6 +334,36 @@ export function SalesPage() {
   const openEdit = async (sale: Sale) => {
     try {
       const details = await api<SaleDetails>(`/sales/${sale.id}`);
+      const detailProducts: Record<string, Product> = {};
+      await Promise.all(
+        details.items.map(async (item) => {
+          try {
+            detailProducts[item.product_id] = await api<Product>(`/products/${item.product_id}`);
+          } catch {
+            detailProducts[item.product_id] = {
+              id: item.product_id,
+              code: item.product_code,
+              name: item.product_name,
+              category_id: "",
+              category_name: "",
+              brand: null,
+              unit: item.base_unit,
+              purchase_price: 0,
+              sale_price: item.sale_price,
+              stock_quantity: item.remaining_quantity,
+              minimum_stock: 0,
+              location: null,
+              image_url: null,
+              image_urls: [],
+              description: null,
+              is_active: true,
+              is_low_stock: false,
+              created_at: "",
+              updated_at: ""
+            };
+          }
+        })
+      );
       setEditingId(details.id);
       setLines(details.items.map((item) => ({
         key: item.id,
@@ -318,6 +374,7 @@ export function SalesPage() {
         salePrice: String(item.sale_price),
         discount: String(item.discount)
       })));
+      setSelectedProducts(detailProducts);
       setCustomerId(details.customer_id ?? "");
       setCustomerName(details.customer_name ?? "");
       setCustomerPhone(details.customer_phone ?? "");
@@ -349,7 +406,7 @@ export function SalesPage() {
       current.map((line) => {
         if (line.key !== key) return line;
         if (field === "productId") {
-          const product = products.data?.data.find((item) => item.id === value);
+          const product = productById.get(value);
           return {
             ...line,
             productId: value,
@@ -359,7 +416,7 @@ export function SalesPage() {
           };
         }
         if (field === "unit") {
-          const product = products.data?.data.find((item) => item.id === line.productId);
+          const product = productById.get(line.productId);
           return {
             ...line,
             unit: value,
@@ -395,6 +452,10 @@ export function SalesPage() {
     setProductSearch("");
   };
   const chooseProduct = (lineKey: string, productId: string) => {
+    const product = productById.get(productId);
+    if (product) {
+      setSelectedProducts((current) => ({ ...current, [product.id]: product }));
+    }
     updateLine(lineKey, "productId", productId);
     setProductPickerLineKey(null);
     setProductSearch("");
@@ -637,7 +698,7 @@ export function SalesPage() {
             </div>
             <div className="sale-lines">
               {lines.map((line, index) => {
-                const product = products.data?.data.find((item) => item.id === line.productId);
+                const product = productById.get(line.productId);
                 return (
                   <div className="sale-line" key={line.key}>
                     <span className="line-number">{index + 1}</span>
@@ -777,8 +838,8 @@ export function SalesPage() {
         open={Boolean(productPickerLineKey)}
         title={tr("Mahsulotni tanlash", "Выбор товара")}
         description={tr(
-          "Nom yoki kod yozing, mahsulotlar real vaqtda filtrlansin.",
-          "Введите название или код, список отфильтруется в реальном времени."
+          "Nom, kod, kategoriya yoki joylashuv yozing. Qidiruv barcha mahsulotlar bo'yicha serverda ishlaydi.",
+          "Введите название, код, категорию или место. Поиск выполняется на сервере по всем товарам."
         )}
         onClose={() => {
           setProductPickerLineKey(null);
@@ -796,7 +857,7 @@ export function SalesPage() {
                 className="input"
                 value={productSearch}
                 onChange={(event) => setProductSearch(event.target.value)}
-                placeholder={tr("Masalan: P36 yoki lapka", "Например: P36 или lapka")}
+                placeholder={tr("Masalan: P36, lapka, Polka A1", "Например: P36, lapka, Полка A1")}
               />
               {productSearch && (
                 <button
@@ -814,7 +875,11 @@ export function SalesPage() {
             </div>
           </label>
           <div className="product-picker-results">
-            {filteredProducts.length ? (
+            {products.isFetching ? (
+              <div className="product-picker-empty">
+                {tr("Mahsulotlar qidirilmoqda...", "Поиск товаров...")}
+              </div>
+            ) : filteredProducts.length ? (
               filteredProducts.map((item) => {
                 const disabled = lines.some((other) => other.key !== selectedPickerLine?.key && other.productId === item.id);
                 const isSelected = selectedPickerLine?.productId === item.id;
@@ -829,7 +894,7 @@ export function SalesPage() {
                     <span>
                       <strong>{item.name}</strong>
                       <small>
-                        {item.code} · {item.unit}
+                        {item.code} · {item.category_name} · {item.unit}
                         {item.location ? ` · ${item.location}` : ""}
                       </small>
                     </span>
