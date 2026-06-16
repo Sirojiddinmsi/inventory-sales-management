@@ -204,6 +204,14 @@ export function ProductsPage() {
     enabled: Boolean(historyProduct)
   });
   const visibleProductIds = products.data?.data.map((product) => product.id) ?? [];
+  const tableInstanceKey = [
+    page,
+    pageSize,
+    search,
+    categoryId,
+    locationFilter,
+    lowStock ? "1" : "0"
+  ].join(":");
   const selectedCount = selectedProductIds.length;
   const visibleSelectedCount = visibleProductIds.filter((id) =>
     selectedProductIds.includes(id)
@@ -652,6 +660,7 @@ export function ProductsPage() {
         </div>
 
         <DataTable
+          key={tableInstanceKey}
           loading={products.isLoading}
           empty={!products.data?.data.length}
           minWidth={1040}

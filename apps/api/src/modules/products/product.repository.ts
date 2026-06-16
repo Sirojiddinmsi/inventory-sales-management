@@ -87,12 +87,21 @@ export class ProductRepository {
     values.push(input.limit, (input.page - 1) * input.limit);
 
     const result = await query(
-      `SELECT ${productColumns},
-         COUNT(*) OVER()::int AS total_count
-       ${productFrom}
-       WHERE ${conditions.join(" AND ")}
-       ORDER BY ${orderBy} ${direction}, p.id ${secondaryDirection}
-       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      `WITH paged_product_ids AS (
+         SELECT
+           p.id,
+           COUNT(*) OVER()::int AS total_count
+         ${productFrom}
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY ${orderBy} ${direction}, p.id ${secondaryDirection}
+         LIMIT $${values.length - 1} OFFSET $${values.length}
+       )
+       SELECT ${productColumns},
+              paged_product_ids.total_count
+       FROM paged_product_ids
+       JOIN products p ON p.id = paged_product_ids.id
+       JOIN categories c ON c.id = p.category_id
+       ORDER BY ${orderBy} ${direction}, p.id ${secondaryDirection}`,
       values
     );
 
