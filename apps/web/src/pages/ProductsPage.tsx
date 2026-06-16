@@ -92,6 +92,9 @@ type ImportResult = {
   importedQuantity: number;
 };
 
+const PRODUCT_PAGE_SIZE_KEY = "products.pageSize";
+const productPageSizeOptions = [15, 25, 50, 100] as const;
+
 const headerAliases: Record<keyof Omit<ImportRow, "rowNumber">, string[]> = {
   name: ["nomi", "name", "mahsulot nomi", "product name"],
   category: ["kategoriya", "category"],
@@ -120,11 +123,24 @@ function numericCell(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+function readProductPageSize() {
+  const fallback = 50;
+  try {
+    const stored = Number(window.localStorage.getItem(PRODUCT_PAGE_SIZE_KEY));
+    return productPageSizeOptions.includes(stored as (typeof productPageSizeOptions)[number])
+      ? stored
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function ProductsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { tr } = useI18n();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(readProductPageSize);
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -169,10 +185,10 @@ export function ProductsPage() {
   });
 
   const products = useQuery({
-    queryKey: ["products", page, search, categoryId, locationFilter, lowStock],
+    queryKey: ["products", page, pageSize, search, categoryId, locationFilter, lowStock],
     queryFn: () =>
       api<Paginated<Product>>("/products", {
-        params: { page, limit: 15, search, categoryId, location: locationFilter, lowStock: lowStock || undefined }
+        params: { page, limit: pageSize, search, categoryId, location: locationFilter, lowStock: lowStock || undefined }
       })
   });
   const productHistory = useQuery({
@@ -195,7 +211,10 @@ export function ProductsPage() {
   const allVisibleSelected =
     visibleProductIds.length > 0 && visibleSelectedCount === visibleProductIds.length;
 
-  useEffect(() => setPage(1), [search, categoryId, locationFilter, lowStock]);
+  useEffect(() => setPage(1), [pageSize, search, categoryId, locationFilter, lowStock]);
+  useEffect(() => {
+    window.localStorage.setItem(PRODUCT_PAGE_SIZE_KEY, String(pageSize));
+  }, [pageSize]);
   useEffect(() => {
     if (selectAllRef.current) {
       selectAllRef.current.indeterminate =
@@ -739,6 +758,9 @@ export function ProductsPage() {
             totalPages={products.data.meta.totalPages}
             total={products.data.meta.total}
             onPage={setPage}
+            pageSize={pageSize}
+            pageSizeOptions={[...productPageSizeOptions]}
+            onPageSizeChange={setPageSize}
           />
         )}
       </Card>

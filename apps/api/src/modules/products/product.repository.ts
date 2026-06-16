@@ -57,7 +57,12 @@ export class ProductRepository {
 
     if (input.search) {
       values.push(`%${input.search}%`);
-      conditions.push(`(p.name ILIKE $${values.length} OR p.code ILIKE $${values.length} OR p.location ILIKE $${values.length})`);
+      conditions.push(`(
+        p.name ILIKE $${values.length}
+        OR p.code ILIKE $${values.length}
+        OR c.name ILIKE $${values.length}
+        OR p.location ILIKE $${values.length}
+      )`);
     }
     if (input.categoryId) {
       values.push(input.categoryId);

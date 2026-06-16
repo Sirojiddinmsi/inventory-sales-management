@@ -268,16 +268,36 @@ export function Pagination({
   page,
   totalPages,
   total,
-  onPage
+  onPage,
+  pageSize,
+  pageSizeOptions,
+  onPageSizeChange
 }: {
   page: number;
   totalPages: number;
   total: number;
   onPage: (page: number) => void;
+  pageSize?: number;
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (pageSize: number) => void;
 }) {
   return (
     <div className="pagination">
       <span>Jami: {total}</span>
+      {pageSize && pageSizeOptions && onPageSizeChange && (
+        <label className="pagination-size">
+          <span>Har sahifa:</span>
+          <select
+            className="input"
+            value={pageSize}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          >
+            {pageSizeOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <div>
         <button
           className="icon-button"
