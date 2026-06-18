@@ -75,25 +75,37 @@ export class ProductRepository {
     if (input.lowStock) conditions.push("p.stock_quantity <= p.minimum_stock");
 
     const allowedSort: Record<string, string> = {
+      id: "p.id",
       name: "p.name",
       code: "p.code",
       stock_quantity: "p.stock_quantity",
       sale_price: "p.sale_price",
       created_at: "p.created_at"
     };
-    const orderBy = allowedSort[input.sortBy] ?? "p.created_at";
+    const orderBy = allowedSort[input.sortBy] ?? "p.id";
+    const pagedOrderBy = orderBy.replaceAll("p.", "");
     const direction = input.sortOrder === "asc" ? "ASC" : "DESC";
     const secondaryDirection = input.sortBy === "created_at" ? direction : "ASC";
     values.push(input.limit, (input.page - 1) * input.limit);
 
     const result = await query(
-      `WITH paged_product_ids AS (
-         SELECT
+      `WITH filtered_products AS (
+         SELECT DISTINCT
            p.id,
-           COUNT(*) OVER()::int AS total_count
+           p.name,
+           p.code,
+           p.stock_quantity,
+           p.sale_price,
+           p.created_at
          ${productFrom}
          WHERE ${conditions.join(" AND ")}
-         ORDER BY ${orderBy} ${direction}, p.id ${secondaryDirection}
+       ),
+       paged_product_ids AS (
+         SELECT
+           filtered_products.id,
+           COUNT(*) OVER()::int AS total_count
+         FROM filtered_products
+         ORDER BY ${pagedOrderBy} ${direction}, id ${secondaryDirection}
          LIMIT $${values.length - 1} OFFSET $${values.length}
        )
        SELECT ${productColumns},

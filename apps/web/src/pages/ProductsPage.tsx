@@ -188,7 +188,16 @@ export function ProductsPage() {
     queryKey: ["products", page, pageSize, search, categoryId, locationFilter, lowStock],
     queryFn: () =>
       api<Paginated<Product>>("/products", {
-        params: { page, limit: pageSize, search, categoryId, location: locationFilter, lowStock: lowStock || undefined }
+        params: {
+          page,
+          limit: pageSize,
+          search,
+          categoryId,
+          location: locationFilter,
+          lowStock: lowStock || undefined,
+          sortBy: "id",
+          sortOrder: "asc"
+        }
       })
   });
   const productHistory = useQuery({
@@ -262,6 +271,16 @@ export function ProductsPage() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [previewGallery]);
+  useEffect(() => {
+    if (!import.meta.env.DEV || !products.data) return;
+    console.debug("[Products pagination debug]", {
+      page,
+      pageSize,
+      total: products.data.meta.total,
+      ids: products.data.data.map((product) => product.id),
+      names: products.data.data.map((product) => product.name)
+    });
+  }, [page, pageSize, products.data]);
 
   const save = useMutation({
     mutationFn: () => {
