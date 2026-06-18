@@ -3,8 +3,10 @@ import {
   FileSpreadsheet,
   PackagePlus,
   Plus,
+  Search,
   Trash2,
-  Truck
+  Truck,
+  X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
@@ -116,7 +118,12 @@ export function PurchasesPage() {
   const [importFileName, setImportFileName] = useState("");
   const [importError, setImportError] = useState("");
   const [parsingExcel, setParsingExcel] = useState(false);
+  const [productPickerLineKey, setProductPickerLineKey] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
+  const [selectedProducts, setSelectedProducts] = useState<Record<string, Product>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const productSearchRef = useRef<HTMLInputElement>(null);
 
   const purchases = useQuery({
     queryKey: ["purchases", page, search, from, to],
@@ -131,10 +138,17 @@ export function PurchasesPage() {
     })
   });
   const products = useQuery({
-    queryKey: ["products", "purchase-select"],
+    queryKey: ["products", "purchase-select", debouncedProductSearch],
     queryFn: () => api<Paginated<Product>>("/products", {
-      params: { limit: 200, sortBy: "name", sortOrder: "asc" }
-    })
+      params: {
+        limit: 100,
+        search: debouncedProductSearch,
+        sortBy: "name",
+        sortOrder: "asc"
+      }
+    }),
+    enabled: modalOpen || importOpen || Boolean(productPickerLineKey),
+    staleTime: 30_000
   });
   const suppliers = useQuery({
     queryKey: ["suppliers", "all"],
@@ -144,6 +158,21 @@ export function PurchasesPage() {
   });
 
   useEffect(() => setPage(1), [search, from, to]);
+  useEffect(() => {
+    if (!productPickerLineKey) return;
+    const timer = window.setTimeout(() => productSearchRef.current?.focus(), 40);
+    return () => window.clearTimeout(timer);
+  }, [productPickerLineKey]);
+  useEffect(() => {
+    if (!productPickerLineKey) {
+      setDebouncedProductSearch("");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setDebouncedProductSearch(productSearch.trim());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [productPickerLineKey, productSearch]);
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["purchases"] });
@@ -236,6 +265,24 @@ export function PurchasesPage() {
     () => lines.reduce((sum, line) => sum + lineTotal(line), 0),
     [lines]
   );
+  const productById = useMemo(() => {
+    const map = new Map<string, Product>();
+    Object.values(selectedProducts).forEach((product) => map.set(product.id, product));
+    (products.data?.data ?? []).forEach((product) => map.set(product.id, product));
+    return map;
+  }, [products.data?.data, selectedProducts]);
+  const selectedPickerLine = productPickerLineKey
+    ? lines.find((line) => line.key === productPickerLineKey) ?? null
+    : null;
+  const filteredProducts = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
+    const items = products.data?.data ?? [];
+    if (!term) return items;
+    return items.filter((item) =>
+      [item.name, item.code, item.category_name, item.location ?? ""]
+        .some((value) => value.toLowerCase().includes(term))
+    );
+  }, [productSearch, products.data?.data]);
   const canSave = lines.every(
     (line) => line.productId && Number(line.quantity) > 0 && line.purchasePrice !== ""
   );
@@ -246,7 +293,7 @@ export function PurchasesPage() {
       current.map((line) => {
         if (line.key !== key) return line;
         if (field === "productId") {
-          const product = products.data?.data.find((item) => item.id === value);
+          const product = productById.get(value);
           return {
             ...line,
             productId: value,
@@ -275,8 +322,26 @@ export function PurchasesPage() {
     const initialDate = new Date().toISOString().slice(0, 10);
     setDefaultPurchasedAt(initialDate);
     setDefaultSupplierId("");
+    setSelectedProducts({});
+    setProductPickerLineKey(null);
+    setProductSearch("");
     setLines([newPurchaseLine({ purchasedAt: initialDate })]);
     setModalOpen(true);
+  };
+
+  const openProductPicker = (lineKey: string) => {
+    setProductPickerLineKey(lineKey);
+    setProductSearch("");
+  };
+
+  const chooseProduct = (lineKey: string, productId: string) => {
+    const product = productById.get(productId);
+    if (product) {
+      setSelectedProducts((current) => ({ ...current, [product.id]: product }));
+    }
+    updateLine(lineKey, "productId", productId);
+    setProductPickerLineKey(null);
+    setProductSearch("");
   };
 
   const downloadTemplate = async () => {
@@ -507,20 +572,29 @@ export function PurchasesPage() {
             </div>
             <div className="sale-lines">
               {lines.map((line, index) => {
-                const selectedProduct = products.data?.data.find((product) => product.id === line.productId);
+                const selectedProduct = productById.get(line.productId);
                 return (
                   <div className="sale-line purchase-line" key={line.key}>
                     <span className="line-number">{index + 1}</span>
                     <div className="sale-line-product">
                       <span className="sale-mobile-label">{tr("Mahsulot", "Товар")}</span>
-                      <Select value={line.productId} onChange={(event) => updateLine(line.key, "productId", event.target.value)}>
-                        <option value="">{tr("Mahsulotni tanlang", "Выберите товар")}</option>
-                        {products.data?.data.map((product) => (
-                          <option key={product.id} value={product.id}>
-                            {product.name} ({number(product.stock_quantity)} {product.unit})
-                          </option>
-                        ))}
-                      </Select>
+                      <button
+                        type="button"
+                        className={`sale-product-trigger ${line.productId ? "selected" : ""}`}
+                        onClick={() => openProductPicker(line.key)}
+                      >
+                        <span className="sale-product-trigger-copy">
+                          <strong>
+                            {selectedProduct?.name ?? tr("Mahsulotni tanlang", "Выберите товар")}
+                          </strong>
+                          <small>
+                            {selectedProduct
+                              ? `${selectedProduct.code} · ${selectedProduct.category_name}${selectedProduct.location ? ` · ${selectedProduct.location}` : ""}`
+                              : tr("Nom, kod, kategoriya yoki joylashuv bo‘yicha qidiring", "Ищите по названию, коду, категории или месту")}
+                          </small>
+                        </span>
+                        <Search size={16} />
+                      </button>
                     </div>
                     <div className="sale-line-quantity">
                       <span className="sale-mobile-label">{tr("Miqdor / joy", "Количество / место")}</span>
@@ -587,7 +661,7 @@ export function PurchasesPage() {
                     </div>
                     <small className="line-total-note">
                       {selectedProduct
-                        ? `${tr("Birlik", "Единица")}: ${selectedProduct.unit} · ${tr("Qoldiq", "Остаток")}: ${number(selectedProduct.stock_quantity)} ${selectedProduct.unit}`
+                        ? `${tr("Birlik", "Единица")}: ${selectedProduct.unit} · ${tr("Qoldiq", "Остаток")}: ${number(selectedProduct.stock_quantity)} ${selectedProduct.unit} · ${tr("Oxirgi kirim narxi", "Последняя закупочная цена")}: ${money(selectedProduct.purchase_price)}`
                         : "\u00a0"}
                     </small>
                   </div>
@@ -686,6 +760,78 @@ export function PurchasesPage() {
               </tbody>
             </DataTable>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(productPickerLineKey)}
+        title={tr("Mahsulotni tanlash", "Выбор товара")}
+        description={tr(
+          "Nom, kod, kategoriya yoki joylashuv yozing. Qidiruv barcha mahsulotlar bo‘yicha serverda ishlaydi.",
+          "Введите название, код, категорию или место. Поиск работает по всем товарам на сервере."
+        )}
+        onClose={() => {
+          setProductPickerLineKey(null);
+          setProductSearch("");
+        }}
+        wide
+      >
+        <div className="product-picker">
+          <label className="field">
+            <span className="field-label">{tr("Qidiruv", "Поиск")}</span>
+            <div className="product-picker-search">
+              <Search size={17} />
+              <input
+                ref={productSearchRef}
+                className="input"
+                value={productSearch}
+                onChange={(event) => setProductSearch(event.target.value)}
+                placeholder={tr("Masalan: P36, lapka, Polka A1", "Например: P36, lapka, Полка A1")}
+              />
+              {productSearch && (
+                <button
+                  type="button"
+                  className="icon-button product-picker-clear"
+                  onClick={() => {
+                    setProductSearch("");
+                    productSearchRef.current?.focus();
+                  }}
+                  aria-label={tr("Qidiruvni tozalash", "Очистить поиск")}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          </label>
+          <div className="product-picker-results">
+            {products.isFetching ? (
+              <div className="product-picker-empty">
+                {tr("Mahsulotlar qidirilmoqda...", "Поиск товаров...")}
+              </div>
+            ) : filteredProducts.length ? (
+              filteredProducts.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`product-picker-item ${selectedPickerLine?.productId === item.id ? "active" : ""}`}
+                  onClick={() => selectedPickerLine && chooseProduct(selectedPickerLine.key, item.id)}
+                >
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>
+                      {item.code} · {item.category_name} · {item.unit}
+                      {item.location ? ` · ${item.location}` : ""}
+                    </small>
+                  </span>
+                  <em>{number(item.stock_quantity)} {item.unit}</em>
+                </button>
+              ))
+            ) : (
+              <div className="product-picker-empty">
+                {tr("Mos mahsulot topilmadi.", "Подходящий товар не найден.")}
+              </div>
+            )}
+          </div>
         </div>
       </Modal>
 

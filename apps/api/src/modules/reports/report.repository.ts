@@ -5,7 +5,7 @@ export type ReportFilter = {
   to?: string;
   productId?: string;
   categoryId?: string;
-  paymentType?: "CASH" | "CARD" | "DEBT";
+  paymentType?: "CASH" | "CARD" | "DEBT" | "TRANSFER" | "MIXED";
 };
 
 function saleWhere(filter: ReportFilter, alias = "s") {
@@ -19,7 +19,7 @@ function saleWhere(filter: ReportFilter, alias = "s") {
     values.push(filter.to);
     conditions.push(`${alias}.sold_at <= $${values.length}`);
   }
-  if (filter.paymentType) {
+  if (filter.paymentType && ["CASH", "CARD", "DEBT"].includes(filter.paymentType)) {
     values.push(filter.paymentType);
     conditions.push(`${alias}.payment_type = $${values.length}`);
   }
@@ -57,8 +57,25 @@ export class ReportRepository {
       expenseValues.push(filter.to);
       expenseConditions.push(`spent_at <= $${expenseValues.length}`);
     }
+    const debtPaymentConditions: string[] = [];
+    const debtPaymentValues: unknown[] = [];
+    if (filter.from) {
+      debtPaymentValues.push(filter.from);
+      debtPaymentConditions.push(`dp.paid_at >= $${debtPaymentValues.length}`);
+    }
+    if (filter.to) {
+      debtPaymentValues.push(filter.to);
+      debtPaymentConditions.push(`dp.paid_at <= $${debtPaymentValues.length}`);
+    }
+    if (filter.paymentType) {
+      debtPaymentValues.push(filter.paymentType);
+      debtPaymentConditions.push(`dp.payment_method = $${debtPaymentValues.length}`);
+    }
+    const debtPaymentWhere = debtPaymentConditions.length
+      ? `WHERE ${debtPaymentConditions.join(" AND ")}`
+      : "";
 
-    const [summary, soldProducts, daily, byProduct, byCategory, byPayment, expenses] = await Promise.all([
+    const [summary, soldProducts, daily, byProduct, byCategory, byPayment, debtPayments, expenses] = await Promise.all([
       query(
         `SELECT COUNT(*)::int AS sale_count,
                 COALESCE(SUM(total_amount - returned_amount), 0) AS total_sales,
@@ -145,12 +162,47 @@ export class ReportRepository {
         where.values
       ),
       query(
-        `SELECT s.payment_type, COUNT(*)::int AS sale_count,
-                SUM(s.total_amount - s.returned_amount) AS total_sales,
-                SUM(s.profit - s.returned_profit) AS profit
-         FROM sales s ${where.sql}
-         GROUP BY s.payment_type ORDER BY s.payment_type`,
-        where.values
+        `WITH finance_rows AS (
+           SELECT
+             s.payment_type::text AS payment_type,
+             COUNT(*)::int AS sale_count,
+             COALESCE(SUM(s.total_amount - s.returned_amount), 0) AS total_sales,
+             COALESCE(SUM(s.profit - s.returned_profit), 0) AS profit
+           FROM sales s
+           ${where.sql}
+           GROUP BY s.payment_type
+
+           UNION ALL
+
+           SELECT
+             dp.payment_method::text AS payment_type,
+             COUNT(*)::int AS sale_count,
+             COALESCE(SUM(dp.amount), 0) AS total_sales,
+             0::numeric AS profit
+           FROM debt_payments dp
+           ${debtPaymentWhere}
+           GROUP BY dp.payment_method
+         )
+         SELECT
+           payment_type,
+           SUM(sale_count)::int AS sale_count,
+           SUM(total_sales) AS total_sales,
+           SUM(profit) AS profit
+         FROM finance_rows
+         GROUP BY payment_type
+         ORDER BY payment_type`,
+        [...where.values, ...debtPaymentValues]
+      ),
+      query(
+        `SELECT
+           dp.payment_method,
+           COUNT(*)::int AS payment_count,
+           COALESCE(SUM(dp.amount), 0) AS total_amount
+         FROM debt_payments dp
+         ${debtPaymentWhere}
+         GROUP BY dp.payment_method
+         ORDER BY dp.payment_method`,
+        debtPaymentValues
       ),
       query(
         `SELECT expense_type, COUNT(*)::int AS expense_count, SUM(amount) AS amount
@@ -175,6 +227,7 @@ export class ReportRepository {
       by_product: byProduct.rows,
       by_category: byCategory.rows,
       by_payment_type: byPayment.rows,
+      debt_payments: debtPayments.rows,
       expenses: expenses.rows
     };
   }

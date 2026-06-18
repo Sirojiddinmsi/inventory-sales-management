@@ -1,5 +1,7 @@
 export type UserRole = "ADMIN" | "SELLER";
 export type PaymentType = "CASH" | "CARD" | "DEBT";
+export type DebtPaymentMethod = "CASH" | "CARD" | "TRANSFER" | "MIXED";
+export type FinancePaymentMethod = PaymentType | DebtPaymentMethod;
 export type DebtStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
 
 export type User = {
@@ -193,6 +195,7 @@ export type Sale = {
   archived_at: string | null;
   archive_reason: string | null;
   archive_expires_at: string | null;
+  created_at?: string;
 };
 
 export type SaleItem = {
@@ -253,6 +256,18 @@ export type Debt = {
   archive_expires_at: string | null;
 };
 
+export type DebtPayment = {
+  id: string;
+  amount: number;
+  paid_at: string;
+  note: string | null;
+  received_by_name: string;
+  payment_method: DebtPaymentMethod;
+  cash_amount: number;
+  card_amount: number;
+  transfer_amount: number;
+};
+
 export type Expense = {
   id: string;
   expense_type: string;
@@ -284,7 +299,7 @@ export type DashboardData = {
   outstanding_debt: number;
   today_expenses: number;
   payment_stats: Array<{
-    payment_type: PaymentType;
+    payment_type: FinancePaymentMethod;
     amount: number;
     sale_count: number;
   }>;
@@ -329,10 +344,15 @@ export type ReportData = {
     profit: number;
   }>;
   by_payment_type: Array<{
-    payment_type: PaymentType;
+    payment_type: FinancePaymentMethod;
     sale_count: number;
     total_sales: number;
     profit: number;
+  }>;
+  debt_payments: Array<{
+    payment_method: DebtPaymentMethod;
+    payment_count: number;
+    total_amount: number;
   }>;
   expenses: Array<{
     expense_type: string;

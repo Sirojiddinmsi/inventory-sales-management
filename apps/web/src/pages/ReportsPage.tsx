@@ -89,6 +89,8 @@ export function ReportsPage() {
           <option value="CASH">{tr("Naqd", "Наличные")}</option>
           <option value="CARD">{tr("Plastik", "Карта")}</option>
           <option value="DEBT">{tr("Qarz", "В долг")}</option>
+          <option value="TRANSFER">{tr("Bank o‘tkazmasi", "Перевод")}</option>
+          <option value="MIXED">{tr("Aralash", "Смешанная")}</option>
         </Select>
         <div className="report-period-actions">
           <Button variant="secondary" onClick={() => setPeriod("week")}>
@@ -132,7 +134,11 @@ export function ReportsPage() {
                 ? tr("Naqd", "Наличные")
                 : item.payment_type === "CARD"
                   ? tr("Plastik", "Карта")
-                  : tr("Qarz", "В долг")
+                  : item.payment_type === "DEBT"
+                    ? tr("Qarz", "В долг")
+                    : item.payment_type === "TRANSFER"
+                      ? tr("Bank o‘tkazmasi", "Перевод")
+                      : tr("Aralash", "Смешанная")
             })) ?? []} margin={{ top: 20, right: 20, left: -5, bottom: 0 }}>
               <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#e2e8f0" />
               <XAxis dataKey="label" axisLine={false} tickLine={false} />

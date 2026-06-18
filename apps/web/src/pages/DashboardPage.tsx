@@ -27,12 +27,14 @@ import { Badge, Card, DataTable, PageHeader, StatCard } from "../components/ui";
 import { useI18n } from "../contexts/I18nContext";
 import { api } from "../lib/api";
 import { money, number } from "../lib/format";
-import type { DashboardData, PaymentType } from "../types/api";
+import type { DashboardData, FinancePaymentMethod } from "../types/api";
 
-const paymentColors: Record<PaymentType, string> = {
+const paymentColors: Record<FinancePaymentMethod, string> = {
   CASH: "#2563eb",
   CARD: "#8b5cf6",
-  DEBT: "#f59e0b"
+  DEBT: "#f59e0b",
+  TRANSFER: "#0f766e",
+  MIXED: "#64748b"
 };
 
 export function DashboardPage() {
@@ -42,15 +44,25 @@ export function DashboardPage() {
     queryFn: () => api<DashboardData>("/dashboard")
   });
   const data = dashboard.data;
-  const payments = (["CASH", "CARD", "DEBT"] as PaymentType[]).map((type) => {
+  const paymentLabel = (type: FinancePaymentMethod) =>
+    type === "CASH"
+      ? tr("Naqd", "Наличные")
+      : type === "CARD"
+        ? tr("Plastik", "Карта")
+        : type === "DEBT"
+          ? tr("Qarz", "В долг")
+          : type === "TRANSFER"
+            ? tr("Bank o‘tkazmasi", "Перевод")
+            : tr("Aralash", "Смешанная");
+  const payments = (["CASH", "CARD", "DEBT", "TRANSFER", "MIXED"] as FinancePaymentMethod[]).map((type) => {
     const item = data?.payment_stats.find((stat) => stat.payment_type === type);
     return {
       type,
-      name: type === "CASH" ? tr("Naqd", "Наличные") : type === "CARD" ? tr("Plastik", "Карта") : tr("Qarz", "В долг"),
+      name: paymentLabel(type),
       amount: Number(item?.amount ?? 0),
       count: item?.sale_count ?? 0
     };
-  });
+  }).filter((item) => item.amount > 0 || item.count > 0);
 
   return (
     <>

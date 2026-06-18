@@ -26,11 +26,30 @@ export class DashboardRepository {
            COALESCE((SELECT SUM(amount) FROM expenses WHERE spent_at::date = CURRENT_DATE), 0) AS today_expenses`
       ),
       query(
-        `SELECT payment_type,
-                COALESCE(SUM(total_amount - returned_amount), 0) AS amount,
-                COUNT(*)::int AS sale_count
-         FROM sales
-         WHERE archived_at IS NULL AND sold_at::date = CURRENT_DATE
+        `WITH finance_rows AS (
+           SELECT
+             payment_type::text AS payment_type,
+             COALESCE(SUM(total_amount - returned_amount), 0) AS amount,
+             COUNT(*)::int AS sale_count
+           FROM sales
+           WHERE archived_at IS NULL AND sold_at::date = CURRENT_DATE
+           GROUP BY payment_type
+
+           UNION ALL
+
+           SELECT
+             payment_method::text AS payment_type,
+             COALESCE(SUM(amount), 0) AS amount,
+             COUNT(*)::int AS sale_count
+           FROM debt_payments
+           WHERE paid_at::date = CURRENT_DATE
+           GROUP BY payment_method
+         )
+         SELECT
+           payment_type,
+           SUM(amount) AS amount,
+           SUM(sale_count)::int AS sale_count
+         FROM finance_rows
          GROUP BY payment_type
          ORDER BY payment_type`
       ),

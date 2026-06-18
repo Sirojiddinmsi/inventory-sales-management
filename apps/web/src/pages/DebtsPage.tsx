@@ -20,16 +20,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
 import { api } from "../lib/api";
 import { date, dateTime, money } from "../lib/format";
-import type { Debt, DebtStatus, Paginated } from "../types/api";
+import type { Debt, DebtPayment, DebtPaymentMethod, DebtStatus, Paginated } from "../types/api";
 
 type DebtDetails = Debt & {
-  payments: Array<{
-    id: string;
-    amount: number;
-    paid_at: string;
-    note: string | null;
-    received_by_name: string;
-  }>;
+  payments: DebtPayment[];
 };
 
 const debtTone = (status: DebtStatus) =>
@@ -46,6 +40,10 @@ export function DebtsPage() {
   const [archived, setArchived] = useState(false);
   const [selected, setSelected] = useState<Debt | null>(null);
   const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<DebtPaymentMethod>("CASH");
+  const [cashAmount, setCashAmount] = useState("");
+  const [cardAmount, setCardAmount] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
   const [note, setNote] = useState("");
   const [archiveDebt, setArchiveDebt] = useState<Debt | null>(null);
   const [archiveReason, setArchiveReason] = useState("");
@@ -73,11 +71,22 @@ export function DebtsPage() {
   const pay = useMutation({
     mutationFn: () => api<Debt>(`/debts/${selected!.id}/payments`, {
       method: "POST",
-      body: JSON.stringify({ amount: Number(amount), note: note || null })
+      body: JSON.stringify({
+        amount: Number(amount),
+        paymentMethod,
+        cashAmount: paymentMethod === "MIXED" ? Number(cashAmount || 0) : undefined,
+        cardAmount: paymentMethod === "MIXED" ? Number(cardAmount || 0) : undefined,
+        transferAmount: paymentMethod === "MIXED" ? Number(transferAmount || 0) : undefined,
+        note: note || null
+      })
     }),
     onSuccess: () => {
       toast.success("Qarz to‘lovi qabul qilindi");
       setAmount("");
+      setPaymentMethod("CASH");
+      setCashAmount("");
+      setCardAmount("");
+      setTransferAmount("");
       setNote("");
       refreshDebts();
       void queryClient.invalidateQueries({ queryKey: ["debt", selected?.id] });
@@ -121,11 +130,26 @@ export function DebtsPage() {
   const openDebt = (debt: Debt) => {
     setSelected(debt);
     setAmount("");
+    setPaymentMethod("CASH");
+    setCashAmount("");
+    setCardAmount("");
+    setTransferAmount("");
     setNote("");
   };
 
   const current = details.data ?? selected;
   const remaining = Number(current?.remaining_amount ?? 0);
+  const mixedTotal =
+    Number(cashAmount || 0) + Number(cardAmount || 0) + Number(transferAmount || 0);
+
+  const paymentMethodLabel = (method: DebtPaymentMethod) =>
+    method === "CASH"
+      ? tr("Naqd", "Наличные")
+      : method === "CARD"
+        ? tr("Plastik", "Карта")
+        : method === "TRANSFER"
+          ? tr("Bank o‘tkazmasi", "Перевод")
+          : tr("Aralash to‘lov", "Смешанная оплата");
 
   return (
     <>
@@ -267,7 +291,18 @@ export function DebtsPage() {
               {!details.isLoading && !details.data?.payments.length && <span>{tr("Hali to‘lov qilinmagan", "Платежей пока нет")}</span>}
               {details.data?.payments.map((payment) => (
                 <div key={payment.id}>
-                  <span><strong>{money(payment.amount)}</strong><small>{payment.received_by_name}</small></span>
+                  <span>
+                    <strong>{money(payment.amount)}</strong>
+                    <small>
+                      {paymentMethodLabel(payment.payment_method)} · {payment.received_by_name}
+                    </small>
+                    {payment.payment_method === "MIXED" && (
+                      <small>
+                        {`Naqd: ${money(payment.cash_amount)} · Karta: ${money(payment.card_amount)} · Transfer: ${money(payment.transfer_amount)}`}
+                      </small>
+                    )}
+                    {payment.note && <small>{payment.note}</small>}
+                  </span>
                   <span>{dateTime(payment.paid_at)}</span>
                 </div>
               ))}
@@ -285,6 +320,45 @@ export function DebtsPage() {
                   value={amount}
                   onChange={(event) => setAmount(event.target.value)}
                 />
+                <Select
+                  label={tr("To‘lov usuli *", "Способ оплаты *")}
+                  value={paymentMethod}
+                  onChange={(event) => setPaymentMethod(event.target.value as DebtPaymentMethod)}
+                >
+                  <option value="CASH">{tr("Naqd", "Наличные")}</option>
+                  <option value="CARD">{tr("Plastik", "Карта")}</option>
+                  <option value="TRANSFER">{tr("Bank o‘tkazmasi", "Перевод")}</option>
+                  <option value="MIXED">{tr("Aralash to‘lov", "Смешанная оплата")}</option>
+                </Select>
+                {paymentMethod === "MIXED" && (
+                  <div className="form-grid">
+                    <Input
+                      label={tr("Naqd qismi", "Наличные")}
+                      type="number"
+                      min="0"
+                      value={cashAmount}
+                      onChange={(event) => setCashAmount(event.target.value)}
+                    />
+                    <Input
+                      label={tr("Karta qismi", "Карта")}
+                      type="number"
+                      min="0"
+                      value={cardAmount}
+                      onChange={(event) => setCardAmount(event.target.value)}
+                    />
+                    <Input
+                      label={tr("Transfer qismi", "Перевод")}
+                      type="number"
+                      min="0"
+                      value={transferAmount}
+                      onChange={(event) => setTransferAmount(event.target.value)}
+                    />
+                    <div className="calculated-field">
+                      <span>{tr("Aralash jami", "Сумма смешанной оплаты")}</span>
+                      <strong>{money(mixedTotal)}</strong>
+                    </div>
+                  </div>
+                )}
                 <div className="quick-amounts">
                   <button onClick={() => setAmount(String(remaining / 2))}>50%</button>
                   <button onClick={() => setAmount(String(remaining))}>{tr("To‘liq yopish", "Погасить полностью")}</button>
@@ -292,7 +366,11 @@ export function DebtsPage() {
                 <Textarea label={tr("Izoh", "Примечание")} value={note} onChange={(event) => setNote(event.target.value)} />
                 <Button
                   loading={pay.isPending}
-                  disabled={Number(amount) <= 0 || Number(amount) > remaining}
+                  disabled={
+                    Number(amount) <= 0 ||
+                    Number(amount) > remaining ||
+                    (paymentMethod === "MIXED" && Math.abs(mixedTotal - Number(amount || 0)) > 0.009)
+                  }
                   onClick={() => pay.mutate()}
                 >
                   <HandCoins size={16} /> {tr("To‘lovni saqlash", "Сохранить оплату")}
