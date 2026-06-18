@@ -44,7 +44,14 @@ export function ReportsPage() {
   };
   const reports = useQuery({
     queryKey: ["reports", from, to, paymentType],
-    queryFn: () => api<ReportData>("/reports", { params })
+    queryFn: async () => {
+      try {
+        return await api<ReportData>("/reports", { params });
+      } catch (error) {
+        console.error("Reports request failed", error);
+        throw error;
+      }
+    }
   });
   const report = reports.data;
 
@@ -109,6 +116,8 @@ export function ReportsPage() {
         </Card>
       ) : null}
 
+      {!reports.isError ? (
+        <>
       <div className="stats-grid report-stats">
         <StatCard label={tr("Jami sotuv", "Общие продажи")} value={money(report?.summary.total_sales)} hint={`${report?.summary.sale_count ?? 0} ${tr("ta sotuv", "продаж")}`} icon={Banknote} tone="blue" />
         <StatCard label={tr("FIFO tannarx", "FIFO-себестоимость")} value={money(report?.summary.total_fifo_cost)} hint={`${report?.summary.products_sold_count ?? 0} ${tr("xil mahsulot", "товаров")}`} icon={Calculator} tone="orange" />
@@ -178,6 +187,8 @@ export function ReportsPage() {
           </tbody>
         </DataTable>
       </Card>
+        </>
+      ) : null}
     </>
   );
 }
