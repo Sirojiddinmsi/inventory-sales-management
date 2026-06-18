@@ -51,6 +51,18 @@ export class ReportService {
         Number(row.total_sales),
         Number(row.fifo_cost),
         Number(row.profit)
+      ]),
+      [],
+      [header("Debt payments")],
+      [
+        header("Payment method"),
+        header("Payment count"),
+        header("Total amount")
+      ],
+      ...report.debt_payments.map((row) => [
+        String(row.payment_method),
+        Number(row.payment_count),
+        Number(row.total_amount)
       ])
     ];
 

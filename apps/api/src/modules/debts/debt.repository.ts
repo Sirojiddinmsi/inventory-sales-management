@@ -84,6 +84,10 @@ export class DebtRepository {
   pay(input: {
     debtId: string;
     amount: number;
+    paymentMethod: "CASH" | "CARD" | "TRANSFER" | "MIXED";
+    cashAmount?: number;
+    cardAmount?: number;
+    transferAmount?: number;
     paidAt?: string;
     note?: string | null;
     receivedBy: string;
@@ -108,12 +112,41 @@ export class DebtRepository {
         );
       }
 
+      const cashAmount =
+        input.paymentMethod === "CASH"
+          ? input.amount
+          : Number(input.cashAmount ?? 0);
+      const cardAmount =
+        input.paymentMethod === "CARD"
+          ? input.amount
+          : Number(input.cardAmount ?? 0);
+      const transferAmount =
+        input.paymentMethod === "TRANSFER"
+          ? input.amount
+          : Number(input.transferAmount ?? 0);
+      const splitTotal = cashAmount + cardAmount + transferAmount;
+      if (Math.abs(splitTotal - input.amount) > 0.009) {
+        throw new AppError(
+          422,
+          "Debt payment split must equal total amount",
+          "DEBT_PAYMENT_SPLIT_INVALID",
+          { amount: input.amount, cashAmount, cardAmount, transferAmount }
+        );
+      }
+
       await client.query(
-        `INSERT INTO debt_payments (debt_id, amount, paid_at, note, received_by)
-         VALUES ($1,$2,COALESCE($3::timestamptz,NOW()),$4,$5)`,
+        `INSERT INTO debt_payments (
+           debt_id, amount, payment_method, cash_amount, card_amount,
+           transfer_amount, paid_at, note, received_by
+         )
+         VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::timestamptz,NOW()),$8,$9)`,
         [
           input.debtId,
           input.amount,
+          input.paymentMethod,
+          cashAmount,
+          cardAmount,
+          transferAmount,
           input.paidAt ?? null,
           input.note ?? null,
           input.receivedBy

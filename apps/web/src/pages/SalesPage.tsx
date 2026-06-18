@@ -134,6 +134,20 @@ const newLine = (): SaleLine => ({
   discount: "0"
 });
 
+function toDateTimeLocalInputValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function fromDateTimeLocalInputValue(value: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 export function SalesPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -152,6 +166,7 @@ export function SalesPage() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentType>("CASH");
+  const [soldAt, setSoldAt] = useState(toDateTimeLocalInputValue(new Date().toISOString()));
   const [saleDiscount, setSaleDiscount] = useState("0");
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
@@ -278,6 +293,7 @@ export function SalesPage() {
     })),
     discount: Number(saleDiscount || 0),
     paymentType,
+    soldAt: fromDateTimeLocalInputValue(soldAt),
     dueDate: paymentType === "DEBT" ? dueDate || null : null,
     note: note || null
   });
@@ -384,6 +400,7 @@ export function SalesPage() {
     setCustomerName("");
     setCustomerPhone("");
     setPaymentType("CASH");
+    setSoldAt(toDateTimeLocalInputValue(new Date().toISOString()));
     setSaleDiscount("0");
     setDueDate("");
     setNote("");
@@ -445,6 +462,7 @@ export function SalesPage() {
       setCustomerName(details.customer_name ?? "");
       setCustomerPhone(details.customer_phone ?? "");
       setPaymentType(details.payment_type);
+      setSoldAt(toDateTimeLocalInputValue(details.sold_at));
       setSaleDiscount(String(details.discount));
       setDueDate(details.due_date?.slice(0, 10) ?? "");
       setNote(details.note ?? "");
@@ -752,11 +770,11 @@ export function SalesPage() {
           <>
             <div className="modal-total"><span>{tr("To‘lov summasi", "Сумма к оплате")}</span><strong>{money(total)}</strong></div>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{tr("Bekor qilish", "Отмена")}</Button>
-            <Button
-              loading={save.isPending}
-              disabled={!validLines || !debtCustomerValid || total < 0}
-              onClick={() => save.mutate()}
-            >
+              <Button
+                loading={save.isPending}
+                disabled={!validLines || !debtCustomerValid || !soldAt || total < 0}
+                onClick={() => save.mutate()}
+              >
               {editingId ? tr("O‘zgarishlarni saqlash", "Сохранить изменения") : tr("Sotuvni saqlash", "Сохранить продажу")}
             </Button>
           </>
@@ -913,6 +931,12 @@ export function SalesPage() {
               <Input label={tr("Mijoz nomi", "Имя клиента")} value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
               <Input label={tr("Telefon", "Телефон")} value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
               <Input label={tr("Umumiy chegirma", "Общая скидка")} type="number" min="0" value={saleDiscount} onChange={(event) => setSaleDiscount(event.target.value)} />
+              <Input
+                label={tr("Sotuv sanasi *", "Дата продажи *")}
+                type="datetime-local"
+                value={soldAt}
+                onChange={(event) => setSoldAt(event.target.value)}
+              />
               {paymentType === "DEBT" && (
                 <Input label={tr("Qarz muddati", "Срок долга")} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
               )}
