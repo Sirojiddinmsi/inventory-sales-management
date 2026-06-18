@@ -55,6 +55,28 @@ function saleWhere(filter: ReportFilter, alias = "s") {
   };
 }
 
+function debtPaymentWhere(filter: ReportFilter, offset = 0) {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+  if (filter.from) {
+    values.push(filter.from);
+    conditions.push(`dp.paid_at >= $${offset + values.length}`);
+  }
+  if (filter.to) {
+    values.push(filter.to);
+    conditions.push(`dp.paid_at <= $${offset + values.length}`);
+  }
+  if (isDebtPaymentMethod(filter.paymentType)) {
+    values.push(filter.paymentType);
+    conditions.push(`dp.payment_method = $${offset + values.length}`);
+  }
+
+  return {
+    sql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    values
+  };
+}
+
 export class ReportRepository {
   async get(filter: ReportFilter) {
     const where = saleWhere(filter);
@@ -68,23 +90,8 @@ export class ReportRepository {
       expenseValues.push(filter.to);
       expenseConditions.push(`spent_at <= $${expenseValues.length}`);
     }
-    const debtPaymentConditions: string[] = [];
-    const debtPaymentValues: unknown[] = [];
-    if (filter.from) {
-      debtPaymentValues.push(filter.from);
-      debtPaymentConditions.push(`dp.paid_at >= $${debtPaymentValues.length}`);
-    }
-    if (filter.to) {
-      debtPaymentValues.push(filter.to);
-      debtPaymentConditions.push(`dp.paid_at <= $${debtPaymentValues.length}`);
-    }
-    if (isDebtPaymentMethod(filter.paymentType)) {
-      debtPaymentValues.push(filter.paymentType);
-      debtPaymentConditions.push(`dp.payment_method = $${debtPaymentValues.length}`);
-    }
-    const debtPaymentWhere = debtPaymentConditions.length
-      ? `WHERE ${debtPaymentConditions.join(" AND ")}`
-      : "";
+    const standaloneDebtPaymentWhere = debtPaymentWhere(filter);
+    const combinedDebtPaymentWhere = debtPaymentWhere(filter, where.values.length);
 
     const [summary, soldProducts, daily, byProduct, byCategory, byPayment, debtPayments, expenses] = await Promise.all([
       query(
@@ -191,7 +198,7 @@ export class ReportRepository {
              COALESCE(SUM(dp.amount), 0) AS total_sales,
              0::numeric AS profit
            FROM debt_payments dp
-           ${debtPaymentWhere}
+           ${combinedDebtPaymentWhere.sql}
            GROUP BY dp.payment_method
          )
          SELECT
@@ -202,7 +209,7 @@ export class ReportRepository {
          FROM finance_rows
          GROUP BY payment_type
          ORDER BY payment_type`,
-        [...where.values, ...debtPaymentValues]
+        [...where.values, ...combinedDebtPaymentWhere.values]
       ),
       query(
         `SELECT
@@ -210,10 +217,10 @@ export class ReportRepository {
            COUNT(*)::int AS payment_count,
            COALESCE(SUM(dp.amount), 0) AS total_amount
          FROM debt_payments dp
-         ${debtPaymentWhere}
+         ${standaloneDebtPaymentWhere.sql}
          GROUP BY dp.payment_method
          ORDER BY dp.payment_method`,
-        debtPaymentValues
+        standaloneDebtPaymentWhere.values
       ),
       query(
         `SELECT expense_type, COUNT(*)::int AS expense_count, SUM(amount) AS amount
