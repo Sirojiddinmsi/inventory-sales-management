@@ -8,6 +8,17 @@ export type ReportFilter = {
   paymentType?: "CASH" | "CARD" | "DEBT" | "TRANSFER" | "MIXED";
 };
 
+const SALE_PAYMENT_TYPES = ["CASH", "CARD", "DEBT"] as const;
+const DEBT_PAYMENT_METHODS = ["CASH", "CARD", "TRANSFER", "MIXED"] as const;
+
+function isSalePaymentType(value?: ReportFilter["paymentType"]): value is (typeof SALE_PAYMENT_TYPES)[number] {
+  return Boolean(value && SALE_PAYMENT_TYPES.includes(value as (typeof SALE_PAYMENT_TYPES)[number]));
+}
+
+function isDebtPaymentMethod(value?: ReportFilter["paymentType"]): value is (typeof DEBT_PAYMENT_METHODS)[number] {
+  return Boolean(value && DEBT_PAYMENT_METHODS.includes(value as (typeof DEBT_PAYMENT_METHODS)[number]));
+}
+
 function saleWhere(filter: ReportFilter, alias = "s") {
   const conditions: string[] = [`${alias}.archived_at IS NULL`];
   const values: unknown[] = [];
@@ -19,7 +30,7 @@ function saleWhere(filter: ReportFilter, alias = "s") {
     values.push(filter.to);
     conditions.push(`${alias}.sold_at <= $${values.length}`);
   }
-  if (filter.paymentType && ["CASH", "CARD", "DEBT"].includes(filter.paymentType)) {
+  if (isSalePaymentType(filter.paymentType)) {
     values.push(filter.paymentType);
     conditions.push(`${alias}.payment_type = $${values.length}`);
   }
@@ -67,7 +78,7 @@ export class ReportRepository {
       debtPaymentValues.push(filter.to);
       debtPaymentConditions.push(`dp.paid_at <= $${debtPaymentValues.length}`);
     }
-    if (filter.paymentType) {
+    if (isDebtPaymentMethod(filter.paymentType)) {
       debtPaymentValues.push(filter.paymentType);
       debtPaymentConditions.push(`dp.payment_method = $${debtPaymentValues.length}`);
     }
