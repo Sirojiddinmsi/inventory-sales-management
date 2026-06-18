@@ -1,9 +1,26 @@
 import type { Request, Response } from "express";
+import { env } from "../../config/env.js";
 import { productService } from "./product.service.js";
 
 export class ProductController {
   async list(req: Request, res: Response) {
-    res.json(await productService.list(req.query as never));
+    const result = await productService.list(req.query as never);
+
+    if (env.NODE_ENV !== "production") {
+      req.log.info(
+        {
+          page: result.meta.page,
+          limit: result.meta.limit,
+          total: result.meta.total,
+          totalPages: result.meta.totalPages,
+          ids: result.data.map((product) => product.id),
+          names: result.data.map((product) => product.name)
+        },
+        "Products list debug"
+      );
+    }
+
+    res.json(result);
   }
 
   async get(req: Request, res: Response) {

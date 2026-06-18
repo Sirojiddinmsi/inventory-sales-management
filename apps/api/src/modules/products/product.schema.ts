@@ -12,8 +12,9 @@ export const productListSchema = paginationSchema.extend({
   location: z.string().trim().max(120).optional(),
   lowStock: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
   sortBy: z
-    .enum(["name", "code", "stock_quantity", "sale_price", "created_at"])
-    .default("created_at")
+    .enum(["id", "name", "code", "stock_quantity", "sale_price", "created_at"])
+    .default("id"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc")
 });
 
 export const productCreateSchema = z.object({
