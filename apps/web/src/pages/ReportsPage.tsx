@@ -102,6 +102,13 @@ export function ReportsPage() {
         </div>
       </Card>
 
+      {reports.isError ? (
+        <Card className="empty-state">
+          <strong>{tr("Hisobotlarni yuklab bo‘lmadi", "Не удалось загрузить отчеты")}</strong>
+          <p>{reports.error instanceof Error ? reports.error.message : tr("Server xatoligi yuz berdi.", "Произошла ошибка сервера.")}</p>
+        </Card>
+      ) : null}
+
       <div className="stats-grid report-stats">
         <StatCard label={tr("Jami sotuv", "Общие продажи")} value={money(report?.summary.total_sales)} hint={`${report?.summary.sale_count ?? 0} ${tr("ta sotuv", "продаж")}`} icon={Banknote} tone="blue" />
         <StatCard label={tr("FIFO tannarx", "FIFO-себестоимость")} value={money(report?.summary.total_fifo_cost)} hint={`${report?.summary.products_sold_count ?? 0} ${tr("xil mahsulot", "товаров")}`} icon={Calculator} tone="orange" />
