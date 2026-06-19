@@ -87,6 +87,8 @@ export type Purchase = {
   purchased_at: string;
   note: string | null;
   created_by_name: string;
+  updated_by_name?: string | null;
+  updated_at?: string | null;
 };
 
 export type ProductMovementType = "arrival" | "sale" | "return" | "adjustment";

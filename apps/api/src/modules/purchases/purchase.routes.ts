@@ -6,7 +6,8 @@ import {
   purchaseBulkCreateSchema,
   purchaseCreateSchema,
   purchaseImportSchema,
-  purchaseListSchema
+  purchaseListSchema,
+  purchaseUpdateSchema
 } from "./purchase.schema.js";
 
 export const purchaseRouter = Router();
@@ -24,3 +25,5 @@ purchaseRouter.post(
   asyncHandler(purchaseController.importRows)
 );
 purchaseRouter.post("/", validate(purchaseCreateSchema), asyncHandler(purchaseController.create));
+purchaseRouter.patch("/:id", validate(purchaseUpdateSchema), asyncHandler(purchaseController.update));
+purchaseRouter.delete("/:id", asyncHandler(purchaseController.remove));

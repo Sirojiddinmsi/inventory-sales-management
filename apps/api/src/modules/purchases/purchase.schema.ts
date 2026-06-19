@@ -19,6 +19,8 @@ export const purchaseCreateSchema = z.object({
   note: z.string().trim().max(2000).nullish()
 });
 
+export const purchaseUpdateSchema = purchaseCreateSchema;
+
 export const purchaseBulkRowSchema = z.object({
   supplierId: z.uuid().nullish(),
   productId: z.uuid(),

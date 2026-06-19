@@ -18,6 +18,14 @@ export class PurchaseController {
     res.status(201).json(await purchaseService.importRows(req.body.rows, req.user!.id));
   }
 
+  async update(req: Request, res: Response) {
+    res.json(await purchaseService.update(req.params.id as string, req.body, req.user!.id));
+  }
+
+  async remove(req: Request, res: Response) {
+    res.json(await purchaseService.remove(req.params.id as string, req.user!.id));
+  }
+
   async importTemplate(_req: Request, res: Response) {
     const buffer = await purchaseService.importTemplate();
     res

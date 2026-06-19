@@ -29,6 +29,18 @@ export class PurchaseService {
     return purchaseRepository.importRows(rows, userId);
   }
 
+  update(
+    id: string,
+    input: Omit<Parameters<typeof purchaseRepository.update>[1], "editedBy">,
+    userId: string
+  ) {
+    return purchaseRepository.update(id, { ...input, editedBy: userId });
+  }
+
+  remove(id: string, userId: string) {
+    return purchaseRepository.remove(id, userId);
+  }
+
   async importTemplate() {
     const header = (value: string) => ({
       value,

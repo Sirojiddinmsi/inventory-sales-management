@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Edit3,
   FileSpreadsheet,
   PackagePlus,
   Plus,
@@ -14,6 +15,7 @@ import { readSheet } from "read-excel-file/browser";
 import {
   Button,
   Card,
+  ConfirmDialog,
   DataTable,
   Input,
   Modal,
@@ -32,6 +34,8 @@ type PurchaseLine = {
   key: string;
   supplierId: string;
   productId: string;
+  productName?: string;
+  productCode?: string;
   quantity: string;
   purchasePrice: string;
   location: string;
@@ -107,6 +111,8 @@ export function PurchasesPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [deletingPurchase, setDeletingPurchase] = useState<Purchase | null>(null);
   const [supplierModal, setSupplierModal] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [supplierName, setSupplierName] = useState("");
@@ -180,30 +186,61 @@ export function PurchasesPage() {
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
   };
 
-  const save = useMutation({
+  const save = useMutation<Purchase | { totalRows: number; totalAmount: number }, Error>({
     mutationFn: () =>
-      api<{ totalRows: number; totalAmount: number }>("/purchases/bulk", {
-        method: "POST",
-        body: JSON.stringify({
-          rows: lines.map((line) => ({
-            supplierId: line.supplierId || null,
-            productId: line.productId,
-            quantity: Number(line.quantity),
-            purchasePrice: Number(line.purchasePrice),
-            location: line.location || null,
-            purchasedAt: line.purchasedAt
-              ? new Date(`${line.purchasedAt}T12:00:00`).toISOString()
-              : undefined,
-            note: line.note || null
-          }))
-        })
-      }),
+      editingPurchase
+        ? api<Purchase>(`/purchases/${editingPurchase.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              supplierId: lines[0]?.supplierId || null,
+              productId: lines[0]?.productId,
+              quantity: Number(lines[0]?.quantity ?? 0),
+              purchasePrice: Number(lines[0]?.purchasePrice ?? 0),
+              location: lines[0]?.location || null,
+              purchasedAt: lines[0]?.purchasedAt
+                ? new Date(`${lines[0].purchasedAt}T12:00:00`).toISOString()
+                : undefined,
+              note: lines[0]?.note || null
+            })
+          })
+        : api<{ totalRows: number; totalAmount: number }>("/purchases/bulk", {
+            method: "POST",
+            body: JSON.stringify({
+              rows: lines.map((line) => ({
+                supplierId: line.supplierId || null,
+                productId: line.productId,
+                quantity: Number(line.quantity),
+                purchasePrice: Number(line.purchasePrice),
+                location: line.location || null,
+                purchasedAt: line.purchasedAt
+                  ? new Date(`${line.purchasedAt}T12:00:00`).toISOString()
+                  : undefined,
+                note: line.note || null
+              }))
+            })
+          }),
     onSuccess: (result) => {
-      toast.success(
-        `${result.totalRows} ta mahsulot kirim qilindi. Jami: ${money(result.totalAmount)}`
-      );
+      if (editingPurchase) {
+        toast.success(tr("Kirim yozuvi yangilandi", "Приход обновлен"));
+      } else {
+        const created = result as { totalRows: number; totalAmount: number };
+        toast.success(
+          `${created.totalRows} ta mahsulot kirim qilindi. Jami: ${money(created.totalAmount)}`
+        );
+      }
       setModalOpen(false);
+      setEditingPurchase(null);
       setLines([newPurchaseLine({ purchasedAt: defaultPurchasedAt, supplierId: defaultSupplierId })]);
+      refresh();
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const removePurchase = useMutation({
+    mutationFn: (id: string) => api<{ deleted: boolean }>(`/purchases/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast.success(tr("Kirim o‘chirildi", "Приход удален"));
+      setDeletingPurchase(null);
       refresh();
     },
     onError: (error) => toast.error(error.message)
@@ -297,6 +334,8 @@ export function PurchasesPage() {
           return {
             ...line,
             productId: value,
+            productName: product?.name,
+            productCode: product?.code,
             purchasePrice: product ? String(product.purchase_price) : "",
             location: product?.location ?? line.location
           };
@@ -320,12 +359,36 @@ export function PurchasesPage() {
 
   const openCreate = () => {
     const initialDate = new Date().toISOString().slice(0, 10);
+    setEditingPurchase(null);
     setDefaultPurchasedAt(initialDate);
     setDefaultSupplierId("");
     setSelectedProducts({});
     setProductPickerLineKey(null);
     setProductSearch("");
     setLines([newPurchaseLine({ purchasedAt: initialDate })]);
+    setModalOpen(true);
+  };
+
+  const openEdit = (purchase: Purchase) => {
+    setEditingPurchase(purchase);
+    setDefaultSupplierId(purchase.supplier_id ?? "");
+    setDefaultPurchasedAt(purchase.purchased_at.slice(0, 10));
+    setSelectedProducts({});
+    setProductPickerLineKey(null);
+    setProductSearch("");
+    setLines([
+      newPurchaseLine({
+        supplierId: purchase.supplier_id ?? "",
+        productId: purchase.product_id,
+        productName: purchase.product_name,
+        productCode: purchase.product_code,
+        quantity: String(purchase.quantity),
+        purchasePrice: String(purchase.purchase_price),
+        location: purchase.product_location ?? "",
+        purchasedAt: purchase.purchased_at.slice(0, 10),
+        note: purchase.note ?? ""
+      })
+    ]);
     setModalOpen(true);
   };
 
@@ -465,6 +528,7 @@ export function PurchasesPage() {
               <th>{tr("Kirim narxi", "Закупочная цена")}</th>
               <th>{tr("Jami", "Сумма")}</th>
               <th>{tr("Kiritgan", "Добавил")}</th>
+              <th>{tr("Amallar", "Действия")}</th>
             </tr>
           </thead>
           <tbody>
@@ -483,6 +547,24 @@ export function PurchasesPage() {
                 <td data-label={tr("Kirim narxi", "Закупочная цена")}>{money(purchase.purchase_price)}</td>
                 <td data-label={tr("Jami", "Сумма")}><strong>{money(purchase.total_cost)}</strong></td>
                 <td data-label={tr("Kiritgan", "Добавил")}>{purchase.created_by_name}</td>
+                <td data-label={tr("Amallar", "Действия")}>
+                  <div className="row-actions">
+                    <button
+                      className="icon-button"
+                      onClick={() => openEdit(purchase)}
+                      title={tr("Tahrirlash", "Редактировать")}
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      className="icon-button danger-icon"
+                      onClick={() => setDeletingPurchase(purchase)}
+                      title={tr("O‘chirish", "Удалить")}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -499,12 +581,14 @@ export function PurchasesPage() {
 
       <Modal
         open={modalOpen}
-        title={tr("Yangi kirim hujjati", "Новый приходный документ")}
-        description={tr(
-          "Bir nechta qatorni bir vaqtning o‘zida saqlang. Har bir qator alohida FIFO batch bo‘ladi.",
-          "Сохраняйте несколько строк сразу. Каждая строка станет отдельной FIFO партией."
-        )}
-        onClose={() => setModalOpen(false)}
+        title={editingPurchase ? tr("Kirimni tahrirlash", "Edit purchase") : tr("Yangi kirim hujjati", "New purchase")}
+        description={editingPurchase
+          ? tr("O‘zgarishlar stock va FIFO batchga qo‘llanadi.", "Changes will update stock and the FIFO batch.")
+          : tr(
+              "Bir nechta qatorni bir vaqtning o‘zida saqlang. Har bir qator alohida FIFO batch bo‘ladi.",
+              "Сохраняйте несколько строк сразу. Каждая строка станет отдельной FIFO партией."
+            )}
+        onClose={() => { setModalOpen(false); setEditingPurchase(null); }}
         wide
         footer={
           <>
@@ -512,9 +596,16 @@ export function PurchasesPage() {
               <span>{tr("Hujjat jami", "Итого по документу")}</span>
               <strong>{money(total)}</strong>
             </div>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>{tr("Bekor qilish", "Отмена")}</Button>
-            <Button loading={save.isPending} disabled={!canSave} onClick={() => save.mutate()}>
-              {tr("Kirimni saqlash", "Сохранить приход")}
+            <Button variant="secondary" onClick={() => { setModalOpen(false); setEditingPurchase(null); }}>{tr("Bekor qilish", "Отмена")}</Button>
+            <Button
+              loading={save.isPending}
+              disabled={!canSave}
+              onClick={() => {
+                if (editingPurchase && !window.confirm("Kirimdagi o'zgarishlar stock va FIFO batchni qayta hisoblaydi. Davom etasizmi?")) return;
+                save.mutate();
+              }}
+            >
+              {editingPurchase ? tr("O‘zgarishlarni saqlash", "Save changes") : tr("Kirimni saqlash", "Сохранить приход")}
             </Button>
           </>
         }
@@ -566,9 +657,9 @@ export function PurchasesPage() {
           <div className="sale-section">
             <div className="section-title">
               <div><PackagePlus size={17} /><strong>{tr("Kirim qatorlari", "Строки прихода")}</strong></div>
-              <Button variant="secondary" size="sm" onClick={addRow}>
+              {!editingPurchase && <Button variant="secondary" size="sm" onClick={addRow}>
                 <Plus size={14} /> {tr("Qator qo‘shish", "Добавить строку")}
-              </Button>
+              </Button>}
             </div>
             <div className="sale-lines">
               {lines.map((line, index) => {
@@ -585,7 +676,7 @@ export function PurchasesPage() {
                       >
                         <span className="sale-product-trigger-copy">
                           <strong>
-                            {selectedProduct?.name ?? tr("Mahsulotni tanlang", "Выберите товар")}
+                            {selectedProduct?.name ?? line.productName ?? tr("Mahsulotni tanlang", "Выберите товар")}
                           </strong>
                           <small>
                             {selectedProduct
@@ -858,6 +949,18 @@ export function PurchasesPage() {
           <div className="inline-note"><Truck size={16} /> {tr("Yetkazib beruvchi keyingi kirimlarda ham tanlash uchun saqlanadi.", "Поставщик сохранится для следующих приходов.")}</div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(deletingPurchase)}
+        title={tr("Kirimni o'chirish", "Delete purchase")}
+        message={tr(
+          "Bu kirim hali sotuvlarda ishlatilmagan bo'lsa, stock va FIFO batchdan olib tashlanadi.",
+          "This purchase will be removed from stock and FIFO if it has not been used in sales."
+        )}
+        loading={removePurchase.isPending}
+        onCancel={() => setDeletingPurchase(null)}
+        onConfirm={() => deletingPurchase && removePurchase.mutate(deletingPurchase.id)}
+      />
     </>
   );
 }
