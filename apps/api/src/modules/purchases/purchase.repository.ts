@@ -15,6 +15,28 @@ type CreatePurchaseInput = {
   createdBy: string;
 };
 
+type UpdatePurchaseInput = Omit<CreatePurchaseInput, "createdBy"> & {
+  editedBy: string;
+};
+
+type PurchaseRow = {
+  id: string;
+  supplier_id: string | null;
+  product_id: string;
+  quantity: number;
+  purchase_price: number;
+  total_cost: number;
+  purchased_at: string;
+  location: string | null;
+  note: string | null;
+  created_by: string;
+  created_at: string;
+  updated_by: string | null;
+  updated_at: string | null;
+  deleted_by: string | null;
+  deleted_at: string | null;
+};
+
 export class PurchaseRepository {
   async list(input: {
     page: number;
@@ -29,6 +51,7 @@ export class PurchaseRepository {
   }) {
     const conditions: string[] = [];
     const values: unknown[] = [];
+    conditions.push("pu.deleted_at IS NULL");
 
     if (input.search) {
       values.push(`%${input.search}%`);
@@ -65,12 +88,14 @@ export class PurchaseRepository {
     const result = await query(
       `SELECT pu.*, p.name AS product_name, p.code AS product_code,
               s.name AS supplier_name, u.name AS created_by_name,
-              p.location AS product_location,
+              editor.name AS updated_by_name,
+              COALESCE(pu.location, p.location) AS product_location,
               COUNT(*) OVER()::int AS total_count
        FROM purchases pu
        JOIN products p ON p.id = pu.product_id
        LEFT JOIN suppliers s ON s.id = pu.supplier_id
        JOIN users u ON u.id = pu.created_by
+       LEFT JOIN users editor ON editor.id = pu.updated_by
        ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
        ORDER BY ${orderBy} ${direction}
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
@@ -86,6 +111,158 @@ export class PurchaseRepository {
   create(input: CreatePurchaseInput) {
     return withTransaction(async (client) => {
       return this.createOne(client, input);
+    });
+  }
+
+  update(id: string, input: UpdatePurchaseInput) {
+    return withTransaction(async (client) => {
+      const existing = await this.getPurchaseForUpdate(client, id);
+      const productIds = [...new Set([existing.product_id, input.productId])].sort();
+      await this.lockProducts(client, productIds);
+      if (input.supplierId) {
+        await this.ensureSuppliers(client, [input.supplierId]);
+      }
+
+      const batch = await this.getPurchaseBatchForUpdate(client, id);
+      const hasAllocations = await this.purchaseBatchHasAllocations(client, batch.id);
+      if (existing.product_id !== input.productId && hasAllocations) {
+        throw new AppError(
+          409,
+          "This purchase already has FIFO sales allocations and cannot be moved to another product",
+          "PURCHASE_PRODUCT_CHANGE_BLOCKED"
+        );
+      }
+
+      const quantityDelta = input.quantity - Number(existing.quantity);
+      const newRemaining = Number(batch.remaining_quantity) + quantityDelta;
+      if (newRemaining < -0.0001) {
+        throw new AppError(
+          409,
+          "Cannot reduce purchase quantity below the already sold FIFO quantity",
+          "PURCHASE_QUANTITY_BELOW_CONSUMED",
+          {
+            currentQuantity: Number(existing.quantity),
+            availableToReduce: Number(batch.remaining_quantity),
+            requestedQuantity: input.quantity
+          }
+        );
+      }
+
+      const totalCost = input.quantity * input.purchasePrice;
+      const updatedResult = await client.query(
+        `UPDATE purchases
+         SET supplier_id = $2,
+             product_id = $3,
+             quantity = $4,
+             purchase_price = $5,
+             total_cost = $6,
+             purchased_at = COALESCE($7::timestamptz, purchased_at),
+             location = $8,
+             note = $9,
+             updated_by = $10,
+             updated_at = NOW()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING *`,
+        [
+          id,
+          input.supplierId ?? null,
+          input.productId,
+          input.quantity,
+          input.purchasePrice,
+          totalCost,
+          input.purchasedAt ?? null,
+          input.location?.trim() || null,
+          input.note ?? null,
+          input.editedBy
+        ]
+      );
+      const updated = updatedResult.rows[0]!;
+
+      await client.query(
+        `UPDATE inventory_batches
+         SET product_id = $2,
+             initial_quantity = $3,
+             remaining_quantity = $4,
+             purchase_price = $5,
+             received_at = $6
+         WHERE id = $1`,
+        [
+          batch.id,
+          input.productId,
+          input.quantity,
+          Math.max(0, newRemaining),
+          input.purchasePrice,
+          updated.purchased_at
+        ]
+      );
+
+      if (Number(existing.purchase_price) !== input.purchasePrice) {
+        await this.repriceBatchAllocations(client, batch.id);
+      }
+
+      if (existing.product_id !== input.productId) {
+        await client.query(
+          "UPDATE products SET stock_quantity = stock_quantity - $2 WHERE id = $1",
+          [existing.product_id, existing.quantity]
+        );
+        await client.query(
+          `UPDATE products
+           SET stock_quantity = stock_quantity + $2,
+               purchase_price = $3,
+               location = COALESCE($4, location)
+           WHERE id = $1`,
+          [input.productId, input.quantity, input.purchasePrice, input.location?.trim() || null]
+        );
+      } else {
+        await client.query(
+          `UPDATE products
+           SET stock_quantity = stock_quantity + $2,
+               purchase_price = $3,
+               location = COALESCE($4, location)
+           WHERE id = $1`,
+          [input.productId, quantityDelta, input.purchasePrice, input.location?.trim() || null]
+        );
+      }
+
+      await this.writeAudit(client, id, "UPDATE", existing, updated, input.editedBy);
+      return updated;
+    });
+  }
+
+  remove(id: string, editedBy: string) {
+    return withTransaction(async (client) => {
+      const existing = await this.getPurchaseForUpdate(client, id);
+      await this.lockProduct(client, existing.product_id);
+      const batch = await this.getPurchaseBatchForUpdate(client, id);
+      const hasAllocations = await this.purchaseBatchHasAllocations(client, batch.id);
+      if (hasAllocations || Number(batch.remaining_quantity) < Number(batch.initial_quantity)) {
+        throw new AppError(
+          409,
+          "This purchase has already affected sales and cannot be deleted safely",
+          "PURCHASE_DELETE_BLOCKED"
+        );
+      }
+
+      const deletedResult = await client.query(
+        `UPDATE purchases
+         SET deleted_by = $2,
+             deleted_at = NOW(),
+             updated_by = $2,
+             updated_at = NOW()
+         WHERE id = $1 AND deleted_at IS NULL
+         RETURNING *`,
+        [id, editedBy]
+      );
+      const deleted = deletedResult.rows[0]!;
+
+      await client.query("DELETE FROM inventory_batches WHERE id = $1", [batch.id]);
+      await client.query(
+        "UPDATE products SET stock_quantity = stock_quantity - $2 WHERE id = $1",
+        [existing.product_id, existing.quantity]
+      );
+
+      await this.writeAudit(client, id, "DELETE", existing, deleted, editedBy);
+      return { deleted: true, id };
     });
   }
 
@@ -222,6 +399,13 @@ export class PurchaseRepository {
       ]
     );
     const purchase = result.rows[0]!;
+    if (input.location?.trim()) {
+      await client.query("UPDATE purchases SET location = $2 WHERE id = $1", [
+        purchase.id,
+        input.location.trim()
+      ]);
+      purchase.location = input.location.trim();
+    }
 
     await createInventoryBatch(client, {
       productId: input.productId,
@@ -274,6 +458,128 @@ export class PurchaseRepository {
     if (result.rows.length !== supplierIds.length) {
       throw new AppError(404, "Supplier not found", "SUPPLIER_NOT_FOUND");
     }
+  }
+
+  private async getPurchaseForUpdate(client: PoolClient, id: string) {
+    const result = await client.query<PurchaseRow>(
+      "SELECT * FROM purchases WHERE id = $1 AND deleted_at IS NULL FOR UPDATE",
+      [id]
+    );
+    const purchase = result.rows[0];
+    if (!purchase) throw new AppError(404, "Purchase not found", "PURCHASE_NOT_FOUND");
+    return purchase;
+  }
+
+  private async getPurchaseBatchForUpdate(client: PoolClient, purchaseId: string) {
+    const result = await client.query<{
+      id: string;
+      initial_quantity: number;
+      remaining_quantity: number;
+    }>(
+      `SELECT id, initial_quantity, remaining_quantity
+       FROM inventory_batches
+       WHERE purchase_id = $1
+       ORDER BY created_at ASC, id ASC
+       FOR UPDATE`,
+      [purchaseId]
+    );
+    if (result.rows.length !== 1) {
+      throw new AppError(
+        409,
+        "Purchase FIFO batch is missing or duplicated",
+        "PURCHASE_BATCH_INVALID"
+      );
+    }
+    return result.rows[0]!;
+  }
+
+  private async purchaseBatchHasAllocations(client: PoolClient, batchId: string) {
+    const result = await client.query<{ exists: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM sale_item_batch_allocations WHERE batch_id = $1) AS exists",
+      [batchId]
+    );
+    return Boolean(result.rows[0]?.exists);
+  }
+
+  private async repriceBatchAllocations(client: PoolClient, batchId: string) {
+    await client.query(
+      `UPDATE sale_item_batch_allocations a
+       SET unit_cost = b.purchase_price,
+           cost_amount = ROUND((a.quantity * b.purchase_price)::numeric, 2)
+       FROM inventory_batches b
+       WHERE a.batch_id = b.id AND b.id = $1`,
+      [batchId]
+    );
+
+    const affectedSales = await client.query<{ sale_id: string }>(
+      `WITH affected_items AS (
+         SELECT DISTINCT sale_item_id
+         FROM sale_item_batch_allocations
+         WHERE batch_id = $1
+       ), item_costs AS (
+         SELECT
+           a.sale_item_id,
+           ROUND(SUM(a.quantity * a.unit_cost)::numeric, 2) AS fifo_cost,
+           ROUND(SUM(a.returned_quantity * a.unit_cost)::numeric, 2) AS returned_fifo_cost
+         FROM sale_item_batch_allocations a
+         JOIN affected_items ai ON ai.sale_item_id = a.sale_item_id
+         GROUP BY a.sale_item_id
+       )
+       UPDATE sale_items si
+       SET fifo_cost = ic.fifo_cost,
+           returned_fifo_cost = ic.returned_fifo_cost,
+           purchase_price = CASE WHEN si.quantity > 0 THEN ROUND((ic.fifo_cost / si.quantity)::numeric, 2) ELSE 0 END,
+           profit = si.total_amount - ic.fifo_cost
+       FROM item_costs ic
+       WHERE si.id = ic.sale_item_id
+       RETURNING si.sale_id`,
+      [batchId]
+    );
+
+    const saleIds = [...new Set(affectedSales.rows.map((row) => row.sale_id))];
+    if (!saleIds.length) return;
+
+    await client.query(
+      `WITH sale_costs AS (
+         SELECT
+           sale_id,
+           COALESCE(SUM(fifo_cost), 0) AS fifo_cost,
+           COALESCE(SUM(returned_fifo_cost), 0) AS returned_fifo_cost
+         FROM sale_items
+         WHERE sale_id = ANY($1::uuid[])
+         GROUP BY sale_id
+       )
+       UPDATE sales s
+       SET fifo_cost = sc.fifo_cost,
+           returned_fifo_cost = sc.returned_fifo_cost,
+           profit = s.total_amount - sc.fifo_cost,
+           returned_profit = s.returned_amount - sc.returned_fifo_cost
+       FROM sale_costs sc
+       WHERE s.id = sc.sale_id`,
+      [saleIds]
+    );
+  }
+
+  private async writeAudit(
+    client: PoolClient,
+    purchaseId: string,
+    action: "UPDATE" | "DELETE",
+    beforeData: unknown,
+    afterData: unknown,
+    editedBy: string
+  ) {
+    await client.query(
+      `INSERT INTO purchase_audit_logs (
+         purchase_id, action, before_data, after_data, edited_by
+       ) VALUES ($1,$2,$3::jsonb,$4::jsonb,$5)`,
+      [
+        purchaseId,
+        action,
+        JSON.stringify(beforeData),
+        afterData ? JSON.stringify(afterData) : null,
+        editedBy
+      ]
+    );
   }
 }
 
