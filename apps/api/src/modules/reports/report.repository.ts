@@ -77,6 +77,31 @@ function debtPaymentWhere(filter: ReportFilter, offset = 0) {
   };
 }
 
+function supplierReturnWhere(filter: ReportFilter) {
+  const conditions: string[] = [];
+  const values: unknown[] = [];
+  if (filter.from) {
+    values.push(filter.from);
+    conditions.push(`sr.returned_at >= $${values.length}`);
+  }
+  if (filter.to) {
+    values.push(filter.to);
+    conditions.push(`sr.returned_at <= $${values.length}`);
+  }
+  if (filter.productId) {
+    values.push(filter.productId);
+    conditions.push(`sr.product_id = $${values.length}`);
+  }
+  if (filter.categoryId) {
+    values.push(filter.categoryId);
+    conditions.push(`p.category_id = $${values.length}`);
+  }
+  return {
+    sql: conditions.length ? `WHERE ${conditions.join(" AND ")}` : "",
+    values
+  };
+}
+
 export class ReportRepository {
   async get(filter: ReportFilter) {
     const where = saleWhere(filter);
@@ -92,8 +117,9 @@ export class ReportRepository {
     }
     const standaloneDebtPaymentWhere = debtPaymentWhere(filter);
     const combinedDebtPaymentWhere = debtPaymentWhere(filter, where.values.length);
+    const returnsWhere = supplierReturnWhere(filter);
 
-    const [summary, soldProducts, daily, byProduct, byCategory, byPayment, debtPayments, expenses] = await Promise.all([
+    const [summary, soldProducts, daily, byProduct, byCategory, byPayment, debtPayments, expenses, supplierReturns] = await Promise.all([
       query(
         `SELECT COUNT(*)::int AS sale_count,
                 COALESCE(SUM(total_amount - returned_amount), 0) AS total_sales,
@@ -228,16 +254,31 @@ export class ReportRepository {
          ${expenseConditions.length ? `WHERE ${expenseConditions.join(" AND ")}` : ""}
          GROUP BY expense_type ORDER BY amount DESC`,
         expenseValues
+      ),
+      query(
+        `SELECT sr.id, sr.returned_at, sr.quantity, sr.fifo_cost,
+                sr.agreed_return_price, sr.supplier_return_profit, sr.note,
+                p.id AS product_id, p.code, p.name, p.unit
+         FROM supplier_returns sr
+         JOIN products p ON p.id = sr.product_id
+         ${returnsWhere.sql}
+         ORDER BY sr.returned_at ASC, sr.created_at ASC, sr.id ASC`,
+        returnsWhere.values
       )
     ]);
 
     const totalExpenses = expenses.rows.reduce((sum, item) => sum + Number(item.amount), 0);
+    const supplierReturnProfit = supplierReturns.rows.reduce(
+      (sum, item) => sum + Number(item.supplier_return_profit),
+      0
+    );
     const totals = summary.rows[0]!;
     return {
       summary: {
         ...totals,
         ...soldProducts.rows[0],
-        amount_to_submit: Number(totals.total_fifo_cost),
+        supplier_return_profit: supplierReturnProfit,
+        amount_to_submit: Number(totals.total_fifo_cost) - supplierReturnProfit,
         total_expenses: totalExpenses,
         net_profit: Number(totals.total_profit) - totalExpenses
       },
@@ -246,7 +287,8 @@ export class ReportRepository {
       by_category: byCategory.rows,
       by_payment_type: byPayment.rows,
       debt_payments: debtPayments.rows,
-      expenses: expenses.rows
+      expenses: expenses.rows,
+      supplier_returns: supplierReturns.rows
     };
   }
 }

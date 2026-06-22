@@ -16,7 +16,16 @@ type FifoBatch = {
   purchase_price: number;
 };
 
+export type FifoAllocation = {
+  batchId: string;
+  quantity: number;
+  unitCost: number;
+  costAmount: number;
+};
+
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+const stockQuantity = (value: number) =>
+  Math.round((value + Number.EPSILON) * 1000) / 1000;
 
 export async function createInventoryBatch(client: PoolClient, input: CreateBatchInput) {
   if (input.quantity <= 0) return null;
@@ -45,7 +54,7 @@ export async function consumeFifo(
   quantity: number,
   saleItemId?: string
 ) {
-  if (quantity <= 0) return { fifoCost: 0, weightedUnitCost: 0 };
+  if (quantity <= 0) return { fifoCost: 0, weightedUnitCost: 0, allocations: [] };
 
   const result = await client.query<FifoBatch>(
     `SELECT id, remaining_quantity, purchase_price
@@ -58,6 +67,7 @@ export async function consumeFifo(
 
   let needed = quantity;
   let fifoCost = 0;
+  const allocations: FifoAllocation[] = [];
   for (const batch of result.rows) {
     if (needed <= 0) break;
     const allocated = Math.min(needed, batch.remaining_quantity);
@@ -81,7 +91,13 @@ export async function consumeFifo(
       );
     }
     fifoCost += costAmount;
-    needed = money(needed - allocated);
+    allocations.push({
+      batchId: batch.id,
+      quantity: allocated,
+      unitCost: batch.purchase_price,
+      costAmount
+    });
+    needed = stockQuantity(needed - allocated);
   }
 
   if (needed > 0.0001) {
@@ -89,13 +105,14 @@ export async function consumeFifo(
       409,
       "FIFO inventory batches do not contain enough stock",
       "INSUFFICIENT_FIFO_STOCK",
-      { productId, available: money(quantity - needed), requested: quantity }
+      { productId, available: stockQuantity(quantity - needed), requested: quantity }
     );
   }
 
   return {
     fifoCost: money(fifoCost),
-    weightedUnitCost: money(fifoCost / quantity)
+    weightedUnitCost: money(fifoCost / quantity),
+    allocations
   };
 }
 
@@ -190,7 +207,7 @@ export async function returnFifoToBatches(
       [allocation.id, restored]
     );
     fifoCost += restored * allocation.unit_cost;
-    needed = money(needed - restored);
+    needed = stockQuantity(needed - restored);
   }
 
   if (needed > 0.0001) {

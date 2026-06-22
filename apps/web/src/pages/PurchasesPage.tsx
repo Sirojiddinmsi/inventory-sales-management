@@ -7,6 +7,7 @@ import {
   Search,
   Trash2,
   Truck,
+  Undo2,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -28,7 +29,7 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
-import type { Contact, Paginated, Product, Purchase } from "../types/api";
+import type { Contact, Paginated, Product, Purchase, SupplierReturn } from "../types/api";
 
 type PurchaseLine = {
   key: string;
@@ -54,6 +55,24 @@ type ImportRow = {
   note: string | null;
   errors: string[];
 };
+
+type SupplierReturnForm = {
+  productId: string;
+  quantity: string;
+  agreedReturnPrice: string;
+  returnedAt: string;
+  note: string;
+};
+
+const SUPPLIER_RETURN_PICKER = "__supplier_return__";
+
+const newSupplierReturnForm = (): SupplierReturnForm => ({
+  productId: "",
+  quantity: "1",
+  agreedReturnPrice: "",
+  returnedAt: new Date().toISOString().slice(0, 10),
+  note: ""
+});
 
 const newPurchaseLine = (defaults?: Partial<PurchaseLine>): PurchaseLine => ({
   key: crypto.randomUUID(),
@@ -107,10 +126,14 @@ export function PurchasesPage() {
   const queryClient = useQueryClient();
   const { tr } = useI18n();
   const [page, setPage] = useState(1);
+  const [returnPage, setReturnPage] = useState(1);
+  const [activeView, setActiveView] = useState<"purchases" | "returns">("purchases");
   const [search, setSearch] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [supplierReturnOpen, setSupplierReturnOpen] = useState(false);
+  const [supplierReturnForm, setSupplierReturnForm] = useState<SupplierReturnForm>(newSupplierReturnForm);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [deletingPurchase, setDeletingPurchase] = useState<Purchase | null>(null);
   const [supplierModal, setSupplierModal] = useState(false);
@@ -143,6 +166,19 @@ export function PurchasesPage() {
       }
     })
   });
+  const supplierReturns = useQuery({
+    queryKey: ["supplier-returns", returnPage, search, from, to],
+    queryFn: () => api<Paginated<SupplierReturn>>("/supplier-returns", {
+      params: {
+        page: returnPage,
+        limit: 15,
+        search,
+        from: toIsoFromDateInput(from),
+        to: toIsoEndOfDay(to)
+      }
+    }),
+    enabled: activeView === "returns"
+  });
   const products = useQuery({
     queryKey: ["products", "purchase-select", debouncedProductSearch],
     queryFn: () => api<Paginated<Product>>("/products", {
@@ -153,7 +189,7 @@ export function PurchasesPage() {
         sortOrder: "asc"
       }
     }),
-    enabled: modalOpen || importOpen || Boolean(productPickerLineKey),
+    enabled: modalOpen || importOpen || supplierReturnOpen || Boolean(productPickerLineKey),
     staleTime: 30_000
   });
   const suppliers = useQuery({
@@ -163,7 +199,10 @@ export function PurchasesPage() {
     })
   });
 
-  useEffect(() => setPage(1), [search, from, to]);
+  useEffect(() => {
+    setPage(1);
+    setReturnPage(1);
+  }, [search, from, to]);
   useEffect(() => {
     if (!productPickerLineKey) return;
     const timer = window.setTimeout(() => productSearchRef.current?.focus(), 40);
@@ -184,6 +223,8 @@ export function PurchasesPage() {
     void queryClient.invalidateQueries({ queryKey: ["purchases"] });
     void queryClient.invalidateQueries({ queryKey: ["products"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    void queryClient.invalidateQueries({ queryKey: ["supplier-returns"] });
+    void queryClient.invalidateQueries({ queryKey: ["reports"] });
   };
 
   const save = useMutation<Purchase | { totalRows: number; totalAmount: number }, Error>({
@@ -241,6 +282,29 @@ export function PurchasesPage() {
     onSuccess: () => {
       toast.success(tr("Kirim o‘chirildi", "Приход удален"));
       setDeletingPurchase(null);
+      refresh();
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const saveSupplierReturn = useMutation({
+    mutationFn: () => api<SupplierReturn>("/supplier-returns", {
+      method: "POST",
+      body: JSON.stringify({
+        productId: supplierReturnForm.productId,
+        quantity: Number(supplierReturnForm.quantity),
+        agreedReturnPrice: Number(supplierReturnForm.agreedReturnPrice),
+        returnedAt: supplierReturnForm.returnedAt
+          ? new Date(`${supplierReturnForm.returnedAt}T12:00:00`).toISOString()
+          : undefined,
+        note: supplierReturnForm.note || null
+      })
+    }),
+    onSuccess: () => {
+      toast.success(tr("Mahsulot yetkazib beruvchiga qaytarildi", "Возврат поставщику сохранен"));
+      setSupplierReturnOpen(false);
+      setSupplierReturnForm(newSupplierReturnForm());
+      setActiveView("returns");
       refresh();
     },
     onError: (error) => toast.error(error.message)
@@ -311,6 +375,9 @@ export function PurchasesPage() {
   const selectedPickerLine = productPickerLineKey
     ? lines.find((line) => line.key === productPickerLineKey) ?? null
     : null;
+  const selectedPickerProductId = productPickerLineKey === SUPPLIER_RETURN_PICKER
+    ? supplierReturnForm.productId
+    : selectedPickerLine?.productId;
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     const items = products.data?.data ?? [];
@@ -322,6 +389,13 @@ export function PurchasesPage() {
   }, [productSearch, products.data?.data]);
   const canSave = lines.every(
     (line) => line.productId && Number(line.quantity) > 0 && line.purchasePrice !== ""
+  );
+  const canSaveSupplierReturn = Boolean(
+    supplierReturnForm.productId
+    && Number(supplierReturnForm.quantity) > 0
+    && supplierReturnForm.agreedReturnPrice !== ""
+    && Number(supplierReturnForm.agreedReturnPrice) >= 0
+    && supplierReturnForm.returnedAt
   );
   const hasImportErrors = importRows.some((row) => row.errors.length > 0);
 
@@ -402,9 +476,21 @@ export function PurchasesPage() {
     if (product) {
       setSelectedProducts((current) => ({ ...current, [product.id]: product }));
     }
-    updateLine(lineKey, "productId", productId);
+    if (lineKey === SUPPLIER_RETURN_PICKER) {
+      setSupplierReturnForm((current) => ({ ...current, productId }));
+    } else {
+      updateLine(lineKey, "productId", productId);
+    }
     setProductPickerLineKey(null);
     setProductSearch("");
+  };
+
+  const openSupplierReturn = () => {
+    setSupplierReturnForm(newSupplierReturnForm());
+    setSelectedProducts({});
+    setProductPickerLineKey(null);
+    setProductSearch("");
+    setSupplierReturnOpen(true);
   };
 
   const downloadTemplate = async () => {
@@ -498,6 +584,9 @@ export function PurchasesPage() {
         )}
         actions={
           <>
+            <Button variant="secondary" onClick={openSupplierReturn}>
+              <Undo2 size={17} /> {tr("Yetkazib beruvchiga qaytarish", "Возврат поставщику")}
+            </Button>
             <Button variant="secondary" onClick={() => setImportOpen(true)}>
               <FileSpreadsheet size={17} /> {tr("Excel import", "Импорт Excel")}
             </Button>
@@ -507,6 +596,26 @@ export function PurchasesPage() {
           </>
         }
       />
+      <div className="purchase-view-tabs" role="tablist">
+        <button
+          type="button"
+          className={activeView === "purchases" ? "active" : ""}
+          onClick={() => setActiveView("purchases")}
+          role="tab"
+          aria-selected={activeView === "purchases"}
+        >
+          <PackagePlus size={16} /> {tr("Kirimlar", "Приходы")}
+        </button>
+        <button
+          type="button"
+          className={activeView === "returns" ? "active" : ""}
+          onClick={() => setActiveView("returns")}
+          role="tab"
+          aria-selected={activeView === "returns"}
+        >
+          <Undo2 size={16} /> {tr("Yetkazib beruvchiga qaytarish", "Возврат поставщику")}
+        </button>
+      </div>
       <Card>
         <div className="filters">
           <SearchInput
@@ -517,6 +626,7 @@ export function PurchasesPage() {
           <Input type="date" label={tr("Dan", "С")} value={from} onChange={(e) => setFrom(e.target.value)} />
           <Input type="date" label={tr("Gacha", "По")} value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
+        {activeView === "purchases" ? <>
         <DataTable loading={purchases.isLoading} empty={!purchases.data?.data.length} minWidth={1040}>
           <thead>
             <tr>
@@ -577,6 +687,51 @@ export function PurchasesPage() {
             onPage={setPage}
           />
         )}
+        </> : <>
+          <DataTable loading={supplierReturns.isLoading} empty={!supplierReturns.data?.data.length} minWidth={980}>
+            <thead>
+              <tr>
+                <th>{tr("Sana", "Дата")}</th>
+                <th>{tr("Mahsulot", "Товар")}</th>
+                <th>{tr("Miqdor", "Количество")}</th>
+                <th>{tr("FIFO tannarx", "FIFO-себестоимость")}</th>
+                <th>{tr("Kelishilgan qaytarish narxi", "Согласованная цена возврата")}</th>
+                <th>{tr("Qaytarish foydasi", "Прибыль возврата")}</th>
+                <th>{tr("Izoh", "Примечание")}</th>
+                <th>{tr("Kiritgan", "Добавил")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supplierReturns.data?.data.map((item) => (
+                <tr key={item.id}>
+                  <td data-label={tr("Sana", "Дата")}>{dateTime(item.returned_at)}</td>
+                  <td data-label={tr("Mahsulot", "Товар")}>
+                    <div className="product-cell">
+                      <span className="product-avatar"><Undo2 size={17} /></span>
+                      <div><strong>{item.product_name}</strong></div>
+                    </div>
+                  </td>
+                  <td data-label={tr("Miqdor", "Количество")}><strong>{number(item.quantity)} {item.unit}</strong></td>
+                  <td data-label={tr("FIFO tannarx", "FIFO-себестоимость")}>{money(item.fifo_cost)}</td>
+                  <td data-label={tr("Kelishilgan qaytarish narxi", "Согласованная цена возврата")}>{money(item.agreed_return_price)}</td>
+                  <td data-label={tr("Qaytarish foydasi", "Прибыль возврата")} className={item.supplier_return_profit >= 0 ? "positive" : "negative"}>
+                    <strong>{money(item.supplier_return_profit)}</strong>
+                  </td>
+                  <td data-label={tr("Izoh", "Примечание")}>{item.note || "-"}</td>
+                  <td data-label={tr("Kiritgan", "Добавил")}>{item.created_by_name}</td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
+          {supplierReturns.data && (
+            <Pagination
+              page={supplierReturns.data.meta.page}
+              totalPages={supplierReturns.data.meta.totalPages}
+              total={supplierReturns.data.meta.total}
+              onPage={setReturnPage}
+            />
+          )}
+        </>}
       </Card>
 
       <Modal
@@ -764,6 +919,107 @@ export function PurchasesPage() {
       </Modal>
 
       <Modal
+        open={supplierReturnOpen}
+        title={tr("Yetkazib beruvchiga qaytarish", "Возврат поставщику")}
+        description={tr(
+          "Qaytarilgan mahsulot stockdan FIFO bo‘yicha ayriladi va sotuv sifatida hisoblanmaydi.",
+          "Возвращенный товар списывается со склада по FIFO и не считается продажей."
+        )}
+        onClose={() => {
+          setSupplierReturnOpen(false);
+          setProductPickerLineKey(null);
+        }}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSupplierReturnOpen(false)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={saveSupplierReturn.isPending}
+              disabled={!canSaveSupplierReturn}
+              onClick={() => saveSupplierReturn.mutate()}
+            >
+              <Undo2 size={16} /> {tr("Qaytarishni saqlash", "Сохранить возврат")}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-stack">
+          <label className="field">
+            <span className="field-label">{tr("Mahsulot *", "Товар *")}</span>
+            <button
+              type="button"
+              className={`sale-product-trigger ${supplierReturnForm.productId ? "selected" : ""}`}
+              onClick={() => {
+                setProductPickerLineKey(SUPPLIER_RETURN_PICKER);
+                setProductSearch("");
+              }}
+            >
+              <span className="sale-product-trigger-copy">
+                <strong>
+                  {productById.get(supplierReturnForm.productId)?.name
+                    ?? tr("Mahsulotni tanlang", "Выберите товар")}
+                </strong>
+                <small>
+                  {productById.get(supplierReturnForm.productId)
+                    ? `${tr("Qoldiq", "Остаток")}: ${number(productById.get(supplierReturnForm.productId)!.stock_quantity)} ${productById.get(supplierReturnForm.productId)!.unit}`
+                    : tr("Nom, kod, kategoriya yoki joylashuv bo‘yicha qidiring", "Ищите по названию, коду, категории или месту")}
+                </small>
+              </span>
+              <Search size={16} />
+            </button>
+          </label>
+          <div className="form-grid">
+            <Input
+              label={tr("Miqdor *", "Количество *")}
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={supplierReturnForm.quantity}
+              onChange={(event) => setSupplierReturnForm((current) => ({
+                ...current,
+                quantity: event.target.value
+              }))}
+            />
+            <Input
+              label={tr("Kelishilgan qaytarish narxi (jami) *", "Согласованная цена возврата (итого) *")}
+              type="number"
+              min="0"
+              value={supplierReturnForm.agreedReturnPrice}
+              onChange={(event) => setSupplierReturnForm((current) => ({
+                ...current,
+                agreedReturnPrice: event.target.value
+              }))}
+            />
+            <Input
+              label={tr("Sana *", "Дата *")}
+              type="date"
+              value={supplierReturnForm.returnedAt}
+              onChange={(event) => setSupplierReturnForm((current) => ({
+                ...current,
+                returnedAt: event.target.value
+              }))}
+            />
+          </div>
+          <Textarea
+            label={tr("Izoh", "Примечание")}
+            value={supplierReturnForm.note}
+            onChange={(event) => setSupplierReturnForm((current) => ({
+              ...current,
+              note: event.target.value
+            }))}
+          />
+          <div className="inline-note">
+            <Undo2 size={16} />
+            {tr(
+              "Qaytarish foydasi = kelishilgan jami narx - FIFO tannarx.",
+              "Прибыль возврата = согласованная итоговая цена - FIFO-себестоимость."
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
         open={importOpen}
         title={tr("Excel orqali kirim qilish", "Приход через Excel")}
         description={tr(
@@ -904,8 +1160,8 @@ export function PurchasesPage() {
                 <button
                   key={item.id}
                   type="button"
-                  className={`product-picker-item ${selectedPickerLine?.productId === item.id ? "active" : ""}`}
-                  onClick={() => selectedPickerLine && chooseProduct(selectedPickerLine.key, item.id)}
+                  className={`product-picker-item ${selectedPickerProductId === item.id ? "active" : ""}`}
+                  onClick={() => productPickerLineKey && chooseProduct(productPickerLineKey, item.id)}
                 >
                   <span>
                     <strong>{item.name}</strong>

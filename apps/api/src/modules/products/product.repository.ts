@@ -148,7 +148,7 @@ export class ProductRepository {
     filter: {
       from?: string;
       to?: string;
-      movementType?: "arrival" | "sale" | "return" | "adjustment";
+      movementType?: "arrival" | "sale" | "return" | "supplier_return" | "adjustment";
     }
   ) {
     const batchValues: unknown[] = [id];
@@ -159,6 +159,8 @@ export class ProductRepository {
     const saleConditions = ["si.product_id = $1", "s.archived_at IS NULL"];
     const returnValues: unknown[] = [id];
     const returnConditions = ["sr.product_id = $1"];
+    const supplierReturnValues: unknown[] = [id];
+    const supplierReturnConditions = ["spr.product_id = $1"];
 
     if (filter.from) {
       batchValues.push(filter.from);
@@ -169,6 +171,8 @@ export class ProductRepository {
       saleConditions.push(`s.sold_at >= $${saleValues.length}`);
       returnValues.push(filter.from);
       returnConditions.push(`sr.returned_at >= $${returnValues.length}`);
+      supplierReturnValues.push(filter.from);
+      supplierReturnConditions.push(`spr.returned_at >= $${supplierReturnValues.length}`);
     }
     if (filter.to) {
       batchValues.push(filter.to);
@@ -179,6 +183,8 @@ export class ProductRepository {
       saleConditions.push(`s.sold_at <= $${saleValues.length}`);
       returnValues.push(filter.to);
       returnConditions.push(`sr.returned_at <= $${returnValues.length}`);
+      supplierReturnValues.push(filter.to);
+      supplierReturnConditions.push(`spr.returned_at <= $${supplierReturnValues.length}`);
     }
 
     const productResult = await query(
@@ -189,7 +195,7 @@ export class ProductRepository {
     const product = productResult.rows[0];
     if (!product) return null;
 
-    const [summaryResult, batchesResult, arrivalsResult, salesResult, returnsResult, adjustmentsResult] =
+    const [summaryResult, batchesResult, arrivalsResult, salesResult, returnsResult, supplierReturnsResult, adjustmentsResult] =
       await Promise.all([
         query(
           `SELECT p.stock_quantity AS current_stock,
@@ -246,6 +252,15 @@ export class ProductRepository {
           returnValues
         ),
         query(
+          `SELECT spr.id, spr.returned_at AS movement_at, spr.quantity,
+                  spr.agreed_return_price, spr.fifo_cost,
+                  spr.supplier_return_profit, spr.note
+           FROM supplier_returns spr
+           WHERE ${supplierReturnConditions.join(" AND ")}
+           ORDER BY spr.returned_at DESC, spr.id DESC`,
+          supplierReturnValues
+        ),
+        query(
           `SELECT ib.id, ib.received_at AS movement_at, ib.initial_quantity,
                   ib.purchase_price, ib.remaining_quantity, p.location
            FROM inventory_batches ib
@@ -292,6 +307,17 @@ export class ProductRepository {
       partner_name: row.customer_name,
       note: row.reason
     }));
+    const supplierReturns = supplierReturnsResult.rows.map((row) => ({
+      movement_type: "supplier_return",
+      movement_at: row.movement_at,
+      quantity: row.quantity,
+      total_amount: row.agreed_return_price,
+      fifo_cost: row.fifo_cost,
+      profit: row.supplier_return_profit,
+      reference_number: row.id,
+      partner_name: null,
+      note: row.note
+    }));
     const adjustments = adjustmentsResult.rows.map((row) => ({
       movement_type: "adjustment",
       movement_at: row.movement_at,
@@ -305,7 +331,7 @@ export class ProductRepository {
     }));
 
     const requestedType = filter.movementType;
-    const movements = [...arrivals, ...sales, ...returns, ...adjustments]
+    const movements = [...arrivals, ...sales, ...returns, ...supplierReturns, ...adjustments]
       .filter((row) => !requestedType || row.movement_type === requestedType)
       .sort((a, b) => new Date(b.movement_at).getTime() - new Date(a.movement_at).getTime());
 
@@ -319,6 +345,7 @@ export class ProductRepository {
       arrivals,
       sales,
       returns,
+      supplier_returns: supplierReturns,
       adjustments,
       movements
     };

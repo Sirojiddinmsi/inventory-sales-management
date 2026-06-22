@@ -1,0 +1,18 @@
+import { paginationMeta } from "../../shared/pagination.js";
+import { supplierReturnRepository } from "./supplier-return.repository.js";
+
+export class SupplierReturnService {
+  async list(input: Parameters<typeof supplierReturnRepository.list>[0]) {
+    const result = await supplierReturnRepository.list(input);
+    return { data: result.rows, meta: paginationMeta(result.total, input.page, input.limit) };
+  }
+
+  create(
+    input: Omit<Parameters<typeof supplierReturnRepository.create>[0], "createdBy">,
+    userId: string
+  ) {
+    return supplierReturnRepository.create({ ...input, createdBy: userId });
+  }
+}
+
+export const supplierReturnService = new SupplierReturnService();

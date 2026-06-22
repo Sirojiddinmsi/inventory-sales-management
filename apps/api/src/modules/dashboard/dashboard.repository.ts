@@ -18,6 +18,8 @@ export class DashboardRepository {
            COALESCE((SELECT SUM(profit - returned_profit) FROM sales
                      WHERE archived_at IS NULL
                        AND sold_at >= date_trunc('week', CURRENT_DATE)), 0) AS week_profit,
+           COALESCE((SELECT SUM(supplier_return_profit) FROM supplier_returns
+                     WHERE returned_at >= date_trunc('week', CURRENT_DATE)), 0) AS week_supplier_return_profit,
            COALESCE((SELECT SUM(stock_quantity) FROM products WHERE is_active = TRUE), 0) AS total_stock_quantity,
            COALESCE((SELECT COUNT(*) FROM products
                      WHERE is_active = TRUE AND stock_quantity <= minimum_stock), 0)::int AS low_stock_count,
@@ -67,7 +69,8 @@ export class DashboardRepository {
     const totals = summary.rows[0]!;
     return {
       ...totals,
-      amount_to_submit: totals.week_fifo_cost,
+      amount_to_submit:
+        Number(totals.week_fifo_cost) - Number(totals.week_supplier_return_profit),
       payment_stats: paymentStats.rows,
       low_stock_products: lowStock.rows
     };

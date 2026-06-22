@@ -1094,6 +1094,7 @@ export function ProductsPage() {
               <option value="arrival">{tr("Kirim", "Приход")}</option>
               <option value="sale">{tr("Sotuv", "Продажа")}</option>
               <option value="return">{tr("Qaytarish", "Возврат")}</option>
+              <option value="supplier_return">{tr("Yetkazib beruvchiga qaytarish", "Возврат поставщику")}</option>
               <option value="adjustment">{tr("Adjustment", "Корректировка")}</option>
             </Select>
           </Card>
