@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { env } from "../../config/env.js";
+import { productImageStorage } from "./product-image.storage.js";
 import { productService } from "./product.service.js";
 
 export class ProductController {
@@ -69,9 +70,11 @@ export class ProductController {
 
   async uploadImages(req: Request, res: Response) {
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = (env.PUBLIC_API_URL ?? `${req.protocol}://${req.get("host")}`)
+      .replace(/\/$/, "");
+    const urls = await productImageStorage.save(files, req.user!.id, baseUrl);
     res.status(201).json({
-      urls: files.map((file) => `${baseUrl}/uploads/products/${file.filename}`)
+      urls
     });
   }
 

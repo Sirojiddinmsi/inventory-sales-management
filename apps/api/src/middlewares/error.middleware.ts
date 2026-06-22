@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
+import multer from "multer";
 import { ZodError } from "zod";
 import { env } from "../config/env.js";
 import { AppError } from "../shared/errors/AppError.js";
@@ -18,6 +19,20 @@ export const errorHandler: ErrorRequestHandler = (error: DatabaseError, req, res
         code: "VALIDATION_ERROR",
         message: "Request validation failed",
         details: error.issues
+      }
+    });
+    return;
+  }
+
+  if (error instanceof multer.MulterError) {
+    const fileTooLarge = error.code === "LIMIT_FILE_SIZE";
+    res.status(422).json({
+      error: {
+        code: fileTooLarge ? "IMAGE_TOO_LARGE" : "IMAGE_UPLOAD_ERROR",
+        message: fileTooLarge
+          ? "Har bir rasm hajmi 5 MB dan oshmasligi kerak"
+          : "Rasm yuklash cheklovi buzildi",
+        details: error.code
       }
     });
     return;
@@ -63,4 +78,3 @@ export const errorHandler: ErrorRequestHandler = (error: DatabaseError, req, res
     }
   });
 };
-

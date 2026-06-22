@@ -2,10 +2,7 @@ import { z } from "zod";
 import { paginationSchema } from "../../shared/pagination.js";
 
 const nullableText = z.string().trim().max(2000).nullish();
-const imagePath = z.string().trim().refine(
-  (value) => value.startsWith("/uploads/") || z.url().safeParse(value).success,
-  "Rasm manzili noto'g'ri"
-);
+const imagePath = z.url("Rasm manzili public URL bo'lishi kerak");
 
 export const productListSchema = paginationSchema.extend({
   categoryId: z.uuid().optional(),

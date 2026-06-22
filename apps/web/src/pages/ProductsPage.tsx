@@ -8,6 +8,7 @@ import {
   Edit3,
   FileSpreadsheet,
   History,
+  ImageOff,
   MapPin,
   Plus,
   Tags,
@@ -15,7 +16,7 @@ import {
   Upload,
   X
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ImgHTMLAttributes } from "react";
 import toast from "react-hot-toast";
 import { readSheet } from "read-excel-file/browser";
 import { useSearchParams } from "react-router-dom";
@@ -94,6 +95,35 @@ type ImportResult = {
 
 const PRODUCT_PAGE_SIZE_KEY = "products.pageSize";
 const productPageSizeOptions = [15, 25, 50, 100] as const;
+
+function ProductImage({
+  src,
+  alt,
+  fallbackLabel,
+  fallbackCompact = false,
+  className,
+  ...props
+}: ImgHTMLAttributes<HTMLImageElement> & {
+  src: string;
+  alt: string;
+  fallbackLabel: string;
+  fallbackCompact?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [src]);
+
+  if (failed) {
+    return (
+      <span className={`product-image-fallback ${fallbackCompact ? "compact" : ""} ${className ?? ""}`}>
+        <ImageOff size={fallbackCompact ? 18 : 32} />
+        {!fallbackCompact ? <span>{fallbackLabel}</span> : null}
+      </span>
+    );
+  }
+
+  return <img {...props} className={className} src={src} alt={alt} onError={() => setFailed(true)} />;
+}
 
 const headerAliases: Record<keyof Omit<ImportRow, "rowNumber">, string[]> = {
   name: ["nomi", "name", "mahsulot nomi", "product name"],
@@ -381,6 +411,21 @@ export function ProductsPage() {
       if (form.imageUrls.length + files.length > 4) {
         throw new Error(tr("Jami 4 tagacha rasm tanlash mumkin", "Можно выбрать не более 4 изображений"));
       }
+      const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+      for (const file of files) {
+        if (!allowedTypes.has(file.type)) {
+          throw new Error(tr(
+            "Faqat JPG, PNG yoki WebP rasmlarini yuklash mumkin",
+            "Можно загружать только изображения JPG, PNG или WebP"
+          ));
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          throw new Error(tr(
+            "Har bir rasm hajmi 5 MB dan oshmasligi kerak",
+            "Размер каждого изображения не должен превышать 5 МБ"
+          ));
+        }
+      }
       const body = new FormData();
       files.forEach((file) => body.append("images", file));
       return api<{ urls: string[] }>("/products/images", { method: "POST", body });
@@ -390,6 +435,7 @@ export function ProductsPage() {
         ...current,
         imageUrls: [...current.imageUrls, ...urls].slice(0, 4)
       }));
+      toast.success(tr("Rasm yuklandi", "Изображение загружено"));
     },
     onError: (error) => toast.error(error.message)
   });
@@ -735,7 +781,12 @@ export function ProductsPage() {
                             onClick={() => openPreview(product)}
                             aria-label={tr("Rasmni kattalashtirish", "Увеличить изображение")}
                           >
-                            <img src={product.image_url} alt={product.name} />
+                            <ProductImage
+                              src={product.image_url}
+                              alt={product.name}
+                              fallbackLabel={tr("Rasmni yuklab bo‘lmadi", "Не удалось загрузить изображение")}
+                              fallbackCompact
+                            />
                           </button>
                         )
                         : <Boxes size={18} />}
@@ -867,7 +918,12 @@ export function ProductsPage() {
             <div className="full product-image-gallery">
               {form.imageUrls.filter(Boolean).map((url, index) => (
                 <div className="product-image-preview" key={`${url}-${index}`}>
-                  <img src={url} alt={`${tr("Mahsulot rasmi", "Фото товара")} ${index + 1}`} />
+                  <ProductImage
+                    src={url}
+                    alt={`${tr("Mahsulot rasmi", "Фото товара")} ${index + 1}`}
+                    fallbackLabel={tr("Rasmni yuklab bo‘lmadi", "Не удалось загрузить изображение")}
+                    fallbackCompact
+                  />
                   <button type="button" onClick={() => removeImage(index)} title={tr("Rasmni olib tashlash", "Удалить фото")}>
                     <X size={14} />
                   </button>
@@ -1224,9 +1280,10 @@ export function ProductsPage() {
                   <ChevronLeft size={22} />
                 </button>
               )}
-              <img
-                src={previewGallery.images[previewGallery.index]}
+              <ProductImage
+                src={previewGallery.images[previewGallery.index]!}
                 alt={`${previewGallery.name} ${previewGallery.index + 1}`}
+                fallbackLabel={tr("Rasmni yuklab bo‘lmadi", "Не удалось загрузить изображение")}
                 className="image-lightbox-image"
               />
               {previewGallery.images.length > 1 && (
@@ -1258,7 +1315,12 @@ export function ProductsPage() {
                       }
                       aria-label={`${tr("Rasm", "Изображение")} ${index + 1}`}
                     >
-                      <img src={image} alt="" />
+                      <ProductImage
+                        src={image}
+                        alt=""
+                        fallbackLabel={tr("Rasmni yuklab bo‘lmadi", "Не удалось загрузить изображение")}
+                        fallbackCompact
+                      />
                     </button>
                   ))}
                 </div>

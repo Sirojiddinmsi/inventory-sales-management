@@ -3,12 +3,12 @@ import cors from "cors";
 import express from "express";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
-import { resolve } from "node:path";
 import { pinoHttp } from "pino-http";
 import { env } from "./config/env.js";
 import { query } from "./config/database.js";
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware.js";
 import { apiRouter } from "./routes/index.js";
+import { productImageRouter } from "./modules/products/product-image.routes.js";
 import { asyncHandler } from "./shared/async-handler.js";
 
 export const app = express();
@@ -28,7 +28,7 @@ app.use(
 app.use(compression());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: false }));
-app.use("/uploads", express.static(resolve(process.cwd(), "uploads")));
+app.use("/media/product-images", productImageRouter);
 app.use(
   rateLimit({
     windowMs: env.RATE_LIMIT_WINDOW_MS,
