@@ -11,6 +11,7 @@ import { purchaseRouter } from "../modules/purchases/purchase.routes.js";
 import { reportRouter } from "../modules/reports/report.routes.js";
 import { saleRouter } from "../modules/sales/sale.routes.js";
 import { settingsRouter } from "../modules/settings/settings.routes.js";
+import { supplierReturnRouter } from "../modules/supplier-returns/supplier-return.routes.js";
 import { unitRouter } from "../modules/units/unit.routes.js";
 
 export const apiRouter = Router();
@@ -23,6 +24,7 @@ apiRouter.use("/categories", categoryRouter);
 apiRouter.use("/suppliers", contactRouter);
 apiRouter.use("/customers", contactRouter);
 apiRouter.use("/purchases", purchaseRouter);
+apiRouter.use("/supplier-returns", supplierReturnRouter);
 apiRouter.use("/sales", saleRouter);
 apiRouter.use("/debts", debtRouter);
 apiRouter.use("/expenses", expenseRouter);

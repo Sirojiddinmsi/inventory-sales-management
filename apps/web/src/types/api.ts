@@ -91,7 +91,23 @@ export type Purchase = {
   updated_at?: string | null;
 };
 
-export type ProductMovementType = "arrival" | "sale" | "return" | "adjustment";
+export type SupplierReturn = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_code: string;
+  unit: string;
+  quantity: number;
+  fifo_cost: number;
+  agreed_return_price: number;
+  supplier_return_profit: number;
+  returned_at: string;
+  note: string | null;
+  created_by_name: string;
+  created_at: string;
+};
+
+export type ProductMovementType = "arrival" | "sale" | "return" | "supplier_return" | "adjustment";
 
 export type ProductHistory = {
   product: Product;
@@ -144,6 +160,17 @@ export type ProductHistory = {
     profit: number;
     reference_number: string;
     partner_name: string | null;
+    note: string | null;
+  }>;
+  supplier_returns: Array<{
+    movement_type: "supplier_return";
+    movement_at: string;
+    quantity: number;
+    total_amount: number;
+    fifo_cost: number;
+    profit: number;
+    reference_number: string;
+    partner_name: null;
     note: string | null;
   }>;
   adjustments: Array<{
@@ -315,6 +342,7 @@ export type ReportData = {
     units_sold: number;
     total_sales: number;
     total_fifo_cost: number;
+    supplier_return_profit: number;
     amount_to_submit: number;
     total_profit: number;
     average_sale: number;
@@ -360,5 +388,18 @@ export type ReportData = {
     expense_type: string;
     expense_count: number;
     amount: number;
+  }>;
+  supplier_returns: Array<{
+    id: string;
+    product_id: string;
+    code: string;
+    name: string;
+    unit: string;
+    quantity: number;
+    fifo_cost: number;
+    agreed_return_price: number;
+    supplier_return_profit: number;
+    returned_at: string;
+    note: string | null;
   }>;
 };

@@ -495,7 +495,11 @@ export class PurchaseRepository {
 
   private async purchaseBatchHasAllocations(client: PoolClient, batchId: string) {
     const result = await client.query<{ exists: boolean }>(
-      "SELECT EXISTS (SELECT 1 FROM sale_item_batch_allocations WHERE batch_id = $1) AS exists",
+      `SELECT EXISTS (
+         SELECT 1 FROM sale_item_batch_allocations WHERE batch_id = $1
+         UNION ALL
+         SELECT 1 FROM supplier_return_batch_allocations WHERE batch_id = $1
+       ) AS exists`,
       [batchId]
     );
     return Boolean(result.rows[0]?.exists);
@@ -508,6 +512,33 @@ export class PurchaseRepository {
            cost_amount = ROUND((a.quantity * b.purchase_price)::numeric, 2)
        FROM inventory_batches b
        WHERE a.batch_id = b.id AND b.id = $1`,
+      [batchId]
+    );
+    await client.query(
+      `UPDATE supplier_return_batch_allocations a
+       SET unit_cost = b.purchase_price,
+           cost_amount = ROUND((a.quantity * b.purchase_price)::numeric, 2)
+       FROM inventory_batches b
+       WHERE a.batch_id = b.id AND b.id = $1`,
+      [batchId]
+    );
+    await client.query(
+      `WITH affected_returns AS (
+         SELECT DISTINCT supplier_return_id
+         FROM supplier_return_batch_allocations
+         WHERE batch_id = $1
+       ), return_costs AS (
+         SELECT a.supplier_return_id,
+                ROUND(SUM(a.cost_amount)::numeric, 2) AS fifo_cost
+         FROM supplier_return_batch_allocations a
+         JOIN affected_returns ar ON ar.supplier_return_id = a.supplier_return_id
+         GROUP BY a.supplier_return_id
+       )
+       UPDATE supplier_returns sr
+       SET fifo_cost = rc.fifo_cost,
+           supplier_return_profit = sr.agreed_return_price - rc.fifo_cost
+       FROM return_costs rc
+       WHERE sr.id = rc.supplier_return_id`,
       [batchId]
     );
 

@@ -122,7 +122,7 @@ export function ReportsPage() {
         <StatCard label={tr("Jami sotuv", "Общие продажи")} value={money(report?.summary.total_sales)} hint={`${report?.summary.sale_count ?? 0} ${tr("ta sotuv", "продаж")}`} icon={Banknote} tone="blue" />
         <StatCard label={tr("FIFO tannarx", "FIFO-себестоимость")} value={money(report?.summary.total_fifo_cost)} hint={`${report?.summary.products_sold_count ?? 0} ${tr("xil mahsulot", "товаров")}`} icon={Calculator} tone="orange" />
         <StatCard label={tr("Yalpi foyda", "Валовая прибыль")} value={money(report?.summary.total_profit)} icon={TrendingUp} tone="green" />
-        <StatCard label={tr("Topshiriladigan summa", "Сумма к сдаче")} value={money(report?.summary.amount_to_submit)} hint={tr("Tanlangan davrdagi FIFO tannarx", "FIFO-себестоимость за период")} icon={WalletCards} tone="purple" />
+        <StatCard label={tr("Topshiriladigan summa", "Сумма к сдаче")} value={money(report?.summary.amount_to_submit)} hint={tr("FIFO tannarx minus yetkazib beruvchi qaytarishi", "FIFO-себестоимость минус возврат поставщику")} icon={WalletCards} tone="purple" />
         <StatCard label={tr("Xarajatlar", "Расходы")} value={money(report?.summary.total_expenses)} icon={TrendingDown} tone="orange" />
         <StatCard label={tr("Sof foyda", "Чистая прибыль")} value={money(report?.summary.net_profit)} icon={WalletCards} tone={(report?.summary.net_profit ?? 0) >= 0 ? "purple" : "red"} />
       </div>

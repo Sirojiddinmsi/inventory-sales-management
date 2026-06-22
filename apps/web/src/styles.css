@@ -173,6 +173,10 @@ h1, h2, h3, strong { font-family: "Manrope", "Segoe UI", system-ui, sans-serif; 
 .search-input .input { padding-left: 36px; }
 .filters { padding: 15px 18px; display: flex; gap: 10px; align-items: end; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
 .filters .field { min-width: 150px; }
+.purchase-view-tabs { display: flex; gap: 8px; margin: -8px 0 14px; overflow-x: auto; }
+.purchase-view-tabs button { min-height: 42px; padding: 0 15px; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.purchase-view-tabs button:hover { border-color: #93c5fd; color: #1d4ed8; }
+.purchase-view-tabs button.active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
 .checkbox-filter { height: 39px; padding: 0 12px; display: inline-flex; align-items: center; gap: 8px; color: #475569; border: 1px solid var(--border); border-radius: 8px; background: white; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .checkbox-filter input { accent-color: var(--primary); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -805,6 +809,8 @@ td strong { color: #1e293b; font-size: 12px; }
   .unit-create-row { grid-template-columns: 1fr; }
   .form-grid .full { grid-column: auto; }
   .filters { padding: 14px; align-items: stretch; }
+  .purchase-view-tabs { margin-top: -10px; padding-bottom: 2px; }
+  .purchase-view-tabs button { min-height: 44px; }
   .filters > * { width: 100% !important; }
   .filters .search-input { width: 100%; }
   .input, .button, .icon-button, .sale-product-trigger, .checkbox-filter { min-height: 44px; font-size: 16px; }

@@ -146,7 +146,7 @@ export function DashboardPage() {
           <StatCard
             label={tr("Topshiriladigan summa", "Сумма к сдаче")}
             value={money(data?.amount_to_submit)}
-            hint={tr("Sotilgan mahsulotlarning FIFO tannarxi", "FIFO-себестоимость проданных товаров")}
+            hint={tr("FIFO tannarx minus yetkazib beruvchi qaytarishi", "FIFO-себестоимость минус возврат поставщику")}
             icon={Banknote}
             tone="purple"
           />

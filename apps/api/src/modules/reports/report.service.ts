@@ -19,6 +19,24 @@ export class ReportService {
       [header("Metric"), header("Value")],
       ...Object.entries(report.summary).map(([metric, value]) => [metric, Number(value)]),
       [],
+      [header("Supplier returns")],
+      [
+        header("Date"),
+        header("Product"),
+        header("Quantity"),
+        header("FIFO cost"),
+        header("Agreed return price"),
+        header("Supplier return profit")
+      ],
+      ...report.supplier_returns.map((row) => [
+        String(row.returned_at),
+        String(row.name),
+        Number(row.quantity),
+        Number(row.fifo_cost),
+        Number(row.agreed_return_price),
+        Number(row.supplier_return_profit)
+      ]),
+      [],
       [header("Daily sales")],
       [
         header("Date"),
