@@ -59,7 +59,7 @@ type ImportRow = {
 type SupplierReturnForm = {
   productId: string;
   quantity: string;
-  agreedReturnPrice: string;
+  agreedReturnPricePerUnit: string;
   returnedAt: string;
   note: string;
 };
@@ -69,7 +69,7 @@ const SUPPLIER_RETURN_PICKER = "__supplier_return__";
 const newSupplierReturnForm = (): SupplierReturnForm => ({
   productId: "",
   quantity: "1",
-  agreedReturnPrice: "",
+  agreedReturnPricePerUnit: "",
   returnedAt: new Date().toISOString().slice(0, 10),
   note: ""
 });
@@ -134,6 +134,7 @@ export function PurchasesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [supplierReturnOpen, setSupplierReturnOpen] = useState(false);
   const [supplierReturnForm, setSupplierReturnForm] = useState<SupplierReturnForm>(newSupplierReturnForm);
+  const [deletingSupplierReturn, setDeletingSupplierReturn] = useState<SupplierReturn | null>(null);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [deletingPurchase, setDeletingPurchase] = useState<Purchase | null>(null);
   const [supplierModal, setSupplierModal] = useState(false);
@@ -293,7 +294,7 @@ export function PurchasesPage() {
       body: JSON.stringify({
         productId: supplierReturnForm.productId,
         quantity: Number(supplierReturnForm.quantity),
-        agreedReturnPrice: Number(supplierReturnForm.agreedReturnPrice),
+        agreedReturnPricePerUnit: Number(supplierReturnForm.agreedReturnPricePerUnit),
         returnedAt: supplierReturnForm.returnedAt
           ? new Date(`${supplierReturnForm.returnedAt}T12:00:00`).toISOString()
           : undefined,
@@ -305,6 +306,21 @@ export function PurchasesPage() {
       setSupplierReturnOpen(false);
       setSupplierReturnForm(newSupplierReturnForm());
       setActiveView("returns");
+      refresh();
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const removeSupplierReturn = useMutation({
+    mutationFn: (id: string) => api<{ deleted: boolean }>(`/supplier-returns/${id}`, {
+      method: "DELETE"
+    }),
+    onSuccess: () => {
+      toast.success(tr(
+        "Yetkazib beruvchiga qaytarish o‘chirildi va mahsulot omborga tiklandi",
+        "Возврат поставщику удален, товар восстановлен на складе"
+      ));
+      setDeletingSupplierReturn(null);
       refresh();
     },
     onError: (error) => toast.error(error.message)
@@ -390,11 +406,18 @@ export function PurchasesPage() {
   const canSave = lines.every(
     (line) => line.productId && Number(line.quantity) > 0 && line.purchasePrice !== ""
   );
+  const selectedSupplierReturnProduct = productById.get(supplierReturnForm.productId);
+  const supplierReturnQuantity = Number(supplierReturnForm.quantity);
+  const agreedReturnPricePerUnit = Number(supplierReturnForm.agreedReturnPricePerUnit);
+  const totalAgreedReturnAmount = Number.isFinite(supplierReturnQuantity * agreedReturnPricePerUnit)
+    ? supplierReturnQuantity * agreedReturnPricePerUnit
+    : 0;
   const canSaveSupplierReturn = Boolean(
     supplierReturnForm.productId
-    && Number(supplierReturnForm.quantity) > 0
-    && supplierReturnForm.agreedReturnPrice !== ""
-    && Number(supplierReturnForm.agreedReturnPrice) >= 0
+    && supplierReturnQuantity > 0
+    && supplierReturnQuantity <= Number(selectedSupplierReturnProduct?.stock_quantity ?? 0)
+    && supplierReturnForm.agreedReturnPricePerUnit !== ""
+    && agreedReturnPricePerUnit > 0
     && supplierReturnForm.returnedAt
   );
   const hasImportErrors = importRows.some((row) => row.errors.length > 0);
@@ -688,17 +711,19 @@ export function PurchasesPage() {
           />
         )}
         </> : <>
-          <DataTable loading={supplierReturns.isLoading} empty={!supplierReturns.data?.data.length} minWidth={980}>
+          <DataTable loading={supplierReturns.isLoading} empty={!supplierReturns.data?.data.length} minWidth={1320}>
             <thead>
               <tr>
                 <th>{tr("Sana", "Дата")}</th>
                 <th>{tr("Mahsulot", "Товар")}</th>
                 <th>{tr("Miqdor", "Количество")}</th>
                 <th>{tr("FIFO tannarx", "FIFO-себестоимость")}</th>
-                <th>{tr("Kelishilgan qaytarish narxi", "Согласованная цена возврата")}</th>
+                <th>{tr("Kelishilgan qaytarish narxi, 1 dona uchun", "Согласованная цена возврата за единицу")}</th>
+                <th>{tr("Kelishilgan jami qaytarish summasi", "Общая согласованная сумма возврата")}</th>
                 <th>{tr("Qaytarish foydasi", "Прибыль возврата")}</th>
                 <th>{tr("Izoh", "Примечание")}</th>
                 <th>{tr("Kiritgan", "Добавил")}</th>
+                <th>{tr("Amallar", "Действия")}</th>
               </tr>
             </thead>
             <tbody>
@@ -713,12 +738,25 @@ export function PurchasesPage() {
                   </td>
                   <td data-label={tr("Miqdor", "Количество")}><strong>{number(item.quantity)} {item.unit}</strong></td>
                   <td data-label={tr("FIFO tannarx", "FIFO-себестоимость")}>{money(item.fifo_cost)}</td>
-                  <td data-label={tr("Kelishilgan qaytarish narxi", "Согласованная цена возврата")}>{money(item.agreed_return_price)}</td>
+                  <td data-label={tr("Kelishilgan qaytarish narxi, 1 dona uchun", "Согласованная цена возврата за единицу")}>{money(item.agreed_return_price_per_unit)}</td>
+                  <td data-label={tr("Kelishilgan jami qaytarish summasi", "Общая согласованная сумма возврата")}>{money(item.total_agreed_return_amount)}</td>
                   <td data-label={tr("Qaytarish foydasi", "Прибыль возврата")} className={item.supplier_return_profit >= 0 ? "positive" : "negative"}>
                     <strong>{money(item.supplier_return_profit)}</strong>
                   </td>
                   <td data-label={tr("Izoh", "Примечание")}>{item.note || "-"}</td>
                   <td data-label={tr("Kiritgan", "Добавил")}>{item.created_by_name}</td>
+                  <td data-label={tr("Amallar", "Действия")}>
+                    <div className="row-actions">
+                      <button
+                        className="icon-button danger-icon"
+                        onClick={() => setDeletingSupplierReturn(item)}
+                        title={tr("Qaytarishni o‘chirish", "Удалить возврат")}
+                        aria-label={tr("Qaytarishni o‘chirish", "Удалить возврат")}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -982,13 +1020,14 @@ export function PurchasesPage() {
               }))}
             />
             <Input
-              label={tr("Kelishilgan qaytarish narxi (jami) *", "Согласованная цена возврата (итого) *")}
+              label={tr("Kelishilgan qaytarish narxi, 1 dona uchun *", "Согласованная цена возврата за единицу *")}
               type="number"
-              min="0"
-              value={supplierReturnForm.agreedReturnPrice}
+              min="0.01"
+              step="0.01"
+              value={supplierReturnForm.agreedReturnPricePerUnit}
               onChange={(event) => setSupplierReturnForm((current) => ({
                 ...current,
-                agreedReturnPrice: event.target.value
+                agreedReturnPricePerUnit: event.target.value
               }))}
             />
             <Input
@@ -1001,6 +1040,22 @@ export function PurchasesPage() {
               }))}
             />
           </div>
+          <div className="supplier-return-total">
+            <span>{tr("Kelishilgan jami qaytarish summasi", "Общая согласованная сумма возврата")}</span>
+            <strong>{money(totalAgreedReturnAmount)}</strong>
+            <small>
+              {number(supplierReturnQuantity || 0)} × {money(agreedReturnPricePerUnit || 0)}
+            </small>
+          </div>
+          {selectedSupplierReturnProduct
+            && supplierReturnQuantity > Number(selectedSupplierReturnProduct.stock_quantity) ? (
+              <div className="inline-note supplier-return-error">
+                {tr(
+                  `Miqdor mavjud qoldiqdan oshmasligi kerak: ${number(selectedSupplierReturnProduct.stock_quantity)} ${selectedSupplierReturnProduct.unit}`,
+                  `Количество не должно превышать остаток: ${number(selectedSupplierReturnProduct.stock_quantity)} ${selectedSupplierReturnProduct.unit}`
+                )}
+              </div>
+            ) : null}
           <Textarea
             label={tr("Izoh", "Примечание")}
             value={supplierReturnForm.note}
@@ -1012,8 +1067,8 @@ export function PurchasesPage() {
           <div className="inline-note">
             <Undo2 size={16} />
             {tr(
-              "Qaytarish foydasi = kelishilgan jami narx - FIFO tannarx.",
-              "Прибыль возврата = согласованная итоговая цена - FIFO-себестоимость."
+              "Qaytarish foydasi = 1 dona narxi × miqdor - FIFO tannarx.",
+              "Прибыль возврата = цена за единицу × количество - FIFO-себестоимость."
             )}
           </div>
         </div>
@@ -1216,6 +1271,17 @@ export function PurchasesPage() {
         loading={removePurchase.isPending}
         onCancel={() => setDeletingPurchase(null)}
         onConfirm={() => deletingPurchase && removePurchase.mutate(deletingPurchase.id)}
+      />
+      <ConfirmDialog
+        open={Boolean(deletingSupplierReturn)}
+        title={tr("Yetkazib beruvchiga qaytarishni o‘chirish", "Удалить возврат поставщику")}
+        message={tr(
+          "Qaytarishni o‘chirsangiz, mahsulot aniq FIFO batchlariga va ombor qoldig‘iga tiklanadi. Hisobotlar ham qayta hisoblanadi.",
+          "При удалении возврата товар будет восстановлен в исходных FIFO-партиях и на складе. Отчеты будут пересчитаны."
+        )}
+        loading={removeSupplierReturn.isPending}
+        onCancel={() => setDeletingSupplierReturn(null)}
+        onConfirm={() => deletingSupplierReturn && removeSupplierReturn.mutate(deletingSupplierReturn.id)}
       />
     </>
   );

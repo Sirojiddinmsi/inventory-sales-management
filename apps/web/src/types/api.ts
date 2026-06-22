@@ -99,7 +99,8 @@ export type SupplierReturn = {
   unit: string;
   quantity: number;
   fifo_cost: number;
-  agreed_return_price: number;
+  agreed_return_price_per_unit: number;
+  total_agreed_return_amount: number;
   supplier_return_profit: number;
   returned_at: string;
   note: string | null;
@@ -166,6 +167,7 @@ export type ProductHistory = {
     movement_type: "supplier_return";
     movement_at: string;
     quantity: number;
+    sale_price: number;
     total_amount: number;
     fifo_cost: number;
     profit: number;
@@ -397,7 +399,8 @@ export type ReportData = {
     unit: string;
     quantity: number;
     fifo_cost: number;
-    agreed_return_price: number;
+    agreed_return_price_per_unit: number;
+    total_agreed_return_amount: number;
     supplier_return_profit: number;
     returned_at: string;
     note: string | null;

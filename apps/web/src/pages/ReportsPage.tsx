@@ -187,6 +187,38 @@ export function ReportsPage() {
           </tbody>
         </DataTable>
       </Card>
+      {report?.supplier_returns.length ? (
+        <Card title={tr("Yetkazib beruvchiga qaytarish tafsilotlari", "Детали возвратов поставщику")}>
+          <DataTable minWidth={1080}>
+            <thead>
+              <tr>
+                <th>{tr("Sana", "Дата")}</th>
+                <th>{tr("Mahsulot", "Товар")}</th>
+                <th>{tr("Miqdor", "Количество")}</th>
+                <th>{tr("1 dona uchun qaytarish narxi", "Цена возврата за единицу")}</th>
+                <th>{tr("Kelishilgan jami summa", "Общая согласованная сумма")}</th>
+                <th>{tr("FIFO tannarx", "FIFO-себестоимость")}</th>
+                <th>{tr("Qaytarish foydasi", "Прибыль возврата")}</th>
+                <th>{tr("Izoh", "Примечание")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.supplier_returns.map((item) => (
+                <tr key={item.id}>
+                  <td data-label={tr("Sana", "Дата")}>{date(item.returned_at)}</td>
+                  <td data-label={tr("Mahsulot", "Товар")}><strong>{item.name}</strong></td>
+                  <td data-label={tr("Miqdor", "Количество")}>{number(item.quantity)} {item.unit}</td>
+                  <td data-label={tr("1 dona uchun qaytarish narxi", "Цена возврата за единицу")}>{money(item.agreed_return_price_per_unit)}</td>
+                  <td data-label={tr("Kelishilgan jami summa", "Общая согласованная сумма")}>{money(item.total_agreed_return_amount)}</td>
+                  <td data-label={tr("FIFO tannarx", "FIFO-себестоимость")}>{money(item.fifo_cost)}</td>
+                  <td data-label={tr("Qaytarish foydasi", "Прибыль возврата")} className={item.supplier_return_profit >= 0 ? "positive" : "negative"}>{money(item.supplier_return_profit)}</td>
+                  <td data-label={tr("Izoh", "Примечание")}>{item.note || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </DataTable>
+        </Card>
+      ) : null}
         </>
       ) : null}
     </>

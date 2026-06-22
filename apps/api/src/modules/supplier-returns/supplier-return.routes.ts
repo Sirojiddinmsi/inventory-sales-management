@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { asyncHandler } from "../../shared/async-handler.js";
 import { validate } from "../../shared/validation.js";
+import { idParamSchema } from "../categories/category.schema.js";
 import { supplierReturnController } from "./supplier-return.controller.js";
 import {
   supplierReturnCreateSchema,
@@ -18,4 +19,9 @@ supplierReturnRouter.post(
   "/",
   validate(supplierReturnCreateSchema),
   asyncHandler(supplierReturnController.create)
+);
+supplierReturnRouter.delete(
+  "/:id",
+  validate(idParamSchema, "params"),
+  asyncHandler(supplierReturnController.remove)
 );

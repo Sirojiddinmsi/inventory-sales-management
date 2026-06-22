@@ -78,7 +78,7 @@ function debtPaymentWhere(filter: ReportFilter, offset = 0) {
 }
 
 function supplierReturnWhere(filter: ReportFilter) {
-  const conditions: string[] = [];
+  const conditions: string[] = ["sr.deleted_at IS NULL"];
   const values: unknown[] = [];
   if (filter.from) {
     values.push(filter.from);
@@ -257,7 +257,9 @@ export class ReportRepository {
       ),
       query(
         `SELECT sr.id, sr.returned_at, sr.quantity, sr.fifo_cost,
-                sr.agreed_return_price, sr.supplier_return_profit, sr.note,
+                sr.agreed_return_price_per_unit,
+                sr.total_agreed_return_amount,
+                sr.supplier_return_profit, sr.note,
                 p.id AS product_id, p.code, p.name, p.unit
          FROM supplier_returns sr
          JOIN products p ON p.id = sr.product_id

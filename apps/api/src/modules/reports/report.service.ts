@@ -24,16 +24,18 @@ export class ReportService {
         header("Date"),
         header("Product"),
         header("Quantity"),
+        header("Agreed return price per unit"),
+        header("Total agreed return amount"),
         header("FIFO cost"),
-        header("Agreed return price"),
         header("Supplier return profit")
       ],
       ...report.supplier_returns.map((row) => [
         String(row.returned_at),
         String(row.name),
         Number(row.quantity),
+        Number(row.agreed_return_price_per_unit),
+        Number(row.total_agreed_return_amount),
         Number(row.fifo_cost),
-        Number(row.agreed_return_price),
         Number(row.supplier_return_profit)
       ]),
       [],
@@ -89,6 +91,8 @@ export class ReportService {
         { width: 24 },
         { width: 34 },
         { width: 18 },
+        { width: 20 },
+        { width: 20 },
         { width: 20 },
         { width: 20 },
         { width: 20 }

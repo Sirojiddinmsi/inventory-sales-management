@@ -202,6 +202,11 @@ td code { padding: 3px 6px; color: #475569; background: #f1f5f9; border-radius: 
 .calculated-field span { color: var(--muted); font-size: 10px; }
 .calculated-field strong { margin-top: 5px; font-size: 15px; }
 .inline-note { padding: 11px 12px; display: flex; align-items: center; gap: 8px; color: #64748b; background: #f8fafc; border-radius: 8px; font-size: 10px; }
+.supplier-return-total { padding: 14px 16px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 16px; border: 1px solid #c7d2fe; border-radius: 10px; background: #eef2ff; }
+.supplier-return-total span { color: #475569; font-size: 11px; font-weight: 700; }
+.supplier-return-total strong { color: #312e81; font-size: 18px; }
+.supplier-return-total small { grid-column: 1 / -1; color: #64748b; }
+.supplier-return-error { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }
 .positive { color: #15803d !important; font-weight: 600; }
 .negative { color: #b91c1c !important; font-weight: 600; }
 .sale-form { display: flex; flex-direction: column; gap: 18px; }
