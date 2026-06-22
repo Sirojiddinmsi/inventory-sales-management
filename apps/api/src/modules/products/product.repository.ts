@@ -160,7 +160,7 @@ export class ProductRepository {
     const returnValues: unknown[] = [id];
     const returnConditions = ["sr.product_id = $1"];
     const supplierReturnValues: unknown[] = [id];
-    const supplierReturnConditions = ["spr.product_id = $1"];
+    const supplierReturnConditions = ["spr.product_id = $1", "spr.deleted_at IS NULL"];
 
     if (filter.from) {
       batchValues.push(filter.from);
@@ -253,7 +253,8 @@ export class ProductRepository {
         ),
         query(
           `SELECT spr.id, spr.returned_at AS movement_at, spr.quantity,
-                  spr.agreed_return_price, spr.fifo_cost,
+                  spr.agreed_return_price_per_unit,
+                  spr.total_agreed_return_amount, spr.fifo_cost,
                   spr.supplier_return_profit, spr.note
            FROM supplier_returns spr
            WHERE ${supplierReturnConditions.join(" AND ")}
@@ -311,7 +312,8 @@ export class ProductRepository {
       movement_type: "supplier_return",
       movement_at: row.movement_at,
       quantity: row.quantity,
-      total_amount: row.agreed_return_price,
+      sale_price: row.agreed_return_price_per_unit,
+      total_amount: row.total_agreed_return_amount,
       fifo_cost: row.fifo_cost,
       profit: row.supplier_return_profit,
       reference_number: row.id,

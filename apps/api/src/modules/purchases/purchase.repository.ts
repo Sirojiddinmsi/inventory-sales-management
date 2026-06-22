@@ -498,7 +498,10 @@ export class PurchaseRepository {
       `SELECT EXISTS (
          SELECT 1 FROM sale_item_batch_allocations WHERE batch_id = $1
          UNION ALL
-         SELECT 1 FROM supplier_return_batch_allocations WHERE batch_id = $1
+         SELECT 1
+         FROM supplier_return_batch_allocations a
+         JOIN supplier_returns sr ON sr.id = a.supplier_return_id
+         WHERE a.batch_id = $1 AND sr.deleted_at IS NULL
        ) AS exists`,
       [batchId]
     );
@@ -518,15 +521,19 @@ export class PurchaseRepository {
       `UPDATE supplier_return_batch_allocations a
        SET unit_cost = b.purchase_price,
            cost_amount = ROUND((a.quantity * b.purchase_price)::numeric, 2)
-       FROM inventory_batches b
-       WHERE a.batch_id = b.id AND b.id = $1`,
+       FROM inventory_batches b, supplier_returns sr
+       WHERE a.batch_id = b.id
+         AND a.supplier_return_id = sr.id
+         AND sr.deleted_at IS NULL
+         AND b.id = $1`,
       [batchId]
     );
     await client.query(
       `WITH affected_returns AS (
          SELECT DISTINCT supplier_return_id
-         FROM supplier_return_batch_allocations
-         WHERE batch_id = $1
+         FROM supplier_return_batch_allocations a
+         JOIN supplier_returns sr ON sr.id = a.supplier_return_id
+         WHERE a.batch_id = $1 AND sr.deleted_at IS NULL
        ), return_costs AS (
          SELECT a.supplier_return_id,
                 ROUND(SUM(a.cost_amount)::numeric, 2) AS fifo_cost
@@ -536,7 +543,10 @@ export class PurchaseRepository {
        )
        UPDATE supplier_returns sr
        SET fifo_cost = rc.fifo_cost,
-           supplier_return_profit = sr.agreed_return_price - rc.fifo_cost
+           total_agreed_return_amount =
+             ROUND((sr.agreed_return_price_per_unit * sr.quantity)::numeric, 2),
+           supplier_return_profit =
+             ROUND((sr.agreed_return_price_per_unit * sr.quantity)::numeric, 2) - rc.fifo_cost
        FROM return_costs rc
        WHERE sr.id = rc.supplier_return_id`,
       [batchId]

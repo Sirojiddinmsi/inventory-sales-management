@@ -13,6 +13,10 @@ export class SupplierReturnService {
   ) {
     return supplierReturnRepository.create({ ...input, createdBy: userId });
   }
+
+  remove(id: string, userId: string) {
+    return supplierReturnRepository.remove(id, userId);
+  }
 }
 
 export const supplierReturnService = new SupplierReturnService();
