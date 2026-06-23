@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ChevronDown,
+  ChevronRight,
   Edit3,
   FileSpreadsheet,
   PackagePlus,
@@ -10,7 +12,7 @@ import {
   Undo2,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { readSheet } from "read-excel-file/browser";
 import {
@@ -29,7 +31,7 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
-import type { Contact, Paginated, Product, Purchase, SupplierReturn } from "../types/api";
+import type { Contact, Paginated, Product, Purchase, PurchaseDocument, SupplierReturn } from "../types/api";
 
 type PurchaseLine = {
   key: string;
@@ -126,6 +128,7 @@ export function PurchasesPage() {
   const queryClient = useQueryClient();
   const { tr } = useI18n();
   const [page, setPage] = useState(1);
+  const [expandedDocumentIds, setExpandedDocumentIds] = useState<string[]>([]);
   const [returnPage, setReturnPage] = useState(1);
   const [activeView, setActiveView] = useState<"purchases" | "returns">("purchases");
   const [search, setSearch] = useState("");
@@ -157,7 +160,7 @@ export function PurchasesPage() {
 
   const purchases = useQuery({
     queryKey: ["purchases", page, search, from, to],
-    queryFn: () => api<Paginated<Purchase>>("/purchases", {
+    queryFn: () => api<Paginated<PurchaseDocument>>("/purchases", {
       params: {
         page,
         limit: 15,
@@ -203,6 +206,7 @@ export function PurchasesPage() {
   useEffect(() => {
     setPage(1);
     setReturnPage(1);
+    setExpandedDocumentIds([]);
   }, [search, from, to]);
   useEffect(() => {
     if (!productPickerLineKey) return;
@@ -650,56 +654,114 @@ export function PurchasesPage() {
           <Input type="date" label={tr("Gacha", "По")} value={to} onChange={(e) => setTo(e.target.value)} />
         </div>
         {activeView === "purchases" ? <>
-        <DataTable loading={purchases.isLoading} empty={!purchases.data?.data.length} minWidth={1040}>
+        <DataTable loading={purchases.isLoading} empty={!purchases.data?.data.length} minWidth={1060}>
           <thead>
             <tr>
+              <th>{tr("Kirim hujjati", "Документ прихода")}</th>
               <th>{tr("Sana", "Дата")}</th>
-              <th>{tr("Mahsulot", "Товар")}</th>
-              <th>{tr("Joylashuv", "Место")}</th>
               <th>{tr("Yetkazib beruvchi", "Поставщик")}</th>
-              <th>{tr("Miqdor", "Количество")}</th>
-              <th>{tr("Kirim narxi", "Закупочная цена")}</th>
-              <th>{tr("Jami", "Сумма")}</th>
+              <th>{tr("Mahsulot qatorlari", "Строк товаров")}</th>
+              <th>{tr("Jami miqdor", "Общее количество")}</th>
+              <th>{tr("Jami summa", "Общая сумма")}</th>
               <th>{tr("Kiritgan", "Добавил")}</th>
               <th>{tr("Amallar", "Действия")}</th>
             </tr>
           </thead>
           <tbody>
-            {purchases.data?.data.map((purchase) => (
-              <tr key={purchase.id}>
-                <td data-label={tr("Sana", "Дата")}>{dateTime(purchase.purchased_at)}</td>
-                <td data-label={tr("Mahsulot", "Товар")}>
-                  <div className="product-cell">
-                    <span className="product-avatar"><PackagePlus size={17} /></span>
-                    <div><strong>{purchase.product_name}</strong></div>
-                  </div>
-                </td>
-                <td data-label={tr("Joylashuv", "Место")}>{purchase.product_location || "-"}</td>
-                <td data-label={tr("Yetkazib beruvchi", "Поставщик")}>{purchase.supplier_name || "-"}</td>
-                <td data-label={tr("Miqdor", "Количество")}><strong>{number(purchase.quantity)}</strong></td>
-                <td data-label={tr("Kirim narxi", "Закупочная цена")}>{money(purchase.purchase_price)}</td>
-                <td data-label={tr("Jami", "Сумма")}><strong>{money(purchase.total_cost)}</strong></td>
-                <td data-label={tr("Kiritgan", "Добавил")}>{purchase.created_by_name}</td>
-                <td data-label={tr("Amallar", "Действия")}>
-                  <div className="row-actions">
-                    <button
-                      className="icon-button"
-                      onClick={() => openEdit(purchase)}
-                      title={tr("Tahrirlash", "Редактировать")}
-                    >
-                      <Edit3 size={16} />
-                    </button>
-                    <button
-                      className="icon-button danger-icon"
-                      onClick={() => setDeletingPurchase(purchase)}
-                      title={tr("O‘chirish", "Удалить")}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {purchases.data?.data.map((document) => {
+              const expanded = expandedDocumentIds.includes(document.id);
+              return (
+                <Fragment key={document.id}>
+                  <tr className={expanded ? "purchase-document-row expanded" : "purchase-document-row"}>
+                    <td data-label={tr("Kirim hujjati", "Документ прихода")}>
+                      <div className="purchase-document-number">
+                        <span className="product-avatar"><PackagePlus size={17} /></span>
+                        <strong>{document.document_number}</strong>
+                      </div>
+                    </td>
+                    <td data-label={tr("Sana", "Дата")}>{dateTime(document.purchased_at)}</td>
+                    <td data-label={tr("Yetkazib beruvchi", "Поставщик")}>
+                      {document.supplier_count > 1
+                        ? tr("Bir nechta", "Несколько")
+                        : document.supplier_name || "-"}
+                    </td>
+                    <td data-label={tr("Mahsulot qatorlari", "Строк товаров")}>
+                      <strong>{document.line_count}</strong>
+                    </td>
+                    <td data-label={tr("Jami miqdor", "Общее количество")}>
+                      <strong>{number(document.total_quantity)}</strong>
+                    </td>
+                    <td data-label={tr("Jami summa", "Общая сумма")}>
+                      <strong>{money(document.total_amount)}</strong>
+                    </td>
+                    <td data-label={tr("Kiritgan", "Добавил")}>{document.created_by_name}</td>
+                    <td data-label={tr("Amallar", "Действия")}>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="icon-button purchase-document-toggle"
+                          onClick={() => setExpandedDocumentIds((current) =>
+                            current.includes(document.id)
+                              ? current.filter((id) => id !== document.id)
+                              : [...current, document.id]
+                          )}
+                          title={expanded
+                            ? tr("Mahsulotlarni yopish", "Скрыть товары")
+                            : tr("Mahsulotlarni ko‘rsatish", "Показать товары")}
+                          aria-expanded={expanded}
+                        >
+                          {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {expanded ? (
+                    <tr className="purchase-document-detail-row">
+                      <td colSpan={8} className="purchase-document-detail-cell">
+                        <div className="purchase-document-items">
+                          <div className="purchase-document-item purchase-document-item-head">
+                            <span>{tr("Mahsulot", "Товар")}</span>
+                            <span>{tr("Joylashuv", "Место")}</span>
+                            <span>{tr("Miqdor", "Количество")}</span>
+                            <span>{tr("Kirim narxi", "Закупочная цена")}</span>
+                            <span>{tr("Qator jami", "Сумма строки")}</span>
+                            <span>{tr("Amallar", "Действия")}</span>
+                          </div>
+                          {document.items.map((purchase) => (
+                            <div className="purchase-document-item" key={purchase.id}>
+                              <div data-label={tr("Mahsulot", "Товар")}>
+                                <strong>{purchase.product_name}</strong>
+                                {purchase.note ? <small title={purchase.note}>{purchase.note}</small> : null}
+                              </div>
+                              <span data-label={tr("Joylashuv", "Место")}>{purchase.product_location || "-"}</span>
+                              <span data-label={tr("Miqdor", "Количество")}><strong>{number(purchase.quantity)} {purchase.unit}</strong></span>
+                              <span data-label={tr("Kirim narxi", "Закупочная цена")}>{money(purchase.purchase_price)}</span>
+                              <span data-label={tr("Qator jami", "Сумма строки")}><strong>{money(purchase.total_cost)}</strong></span>
+                              <div className="row-actions" data-label={tr("Amallar", "Действия")}>
+                                <button
+                                  className="icon-button"
+                                  onClick={() => openEdit(purchase)}
+                                  title={tr("Tahrirlash", "Редактировать")}
+                                >
+                                  <Edit3 size={16} />
+                                </button>
+                                <button
+                                  className="icon-button danger-icon"
+                                  onClick={() => setDeletingPurchase(purchase)}
+                                  title={tr("O‘chirish", "Удалить")}
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
+              );
+            })}
           </tbody>
         </DataTable>
         {purchases.data && (
