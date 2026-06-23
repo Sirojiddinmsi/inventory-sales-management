@@ -75,11 +75,13 @@ export type Contact = {
 
 export type Purchase = {
   id: string;
+  purchase_document_id: string;
   supplier_id: string | null;
   supplier_name: string | null;
   product_id: string;
   product_name: string;
   product_code: string;
+  unit: string;
   product_location: string | null;
   quantity: number;
   purchase_price: number;
@@ -89,6 +91,21 @@ export type Purchase = {
   created_by_name: string;
   updated_by_name?: string | null;
   updated_at?: string | null;
+};
+
+export type PurchaseDocument = {
+  id: string;
+  document_number: string;
+  purchased_at: string;
+  created_at: string;
+  created_by: string;
+  created_by_name: string;
+  supplier_name: string | null;
+  supplier_count: number;
+  line_count: number;
+  total_quantity: number;
+  total_amount: number;
+  items: Purchase[];
 };
 
 export type SupplierReturn = {

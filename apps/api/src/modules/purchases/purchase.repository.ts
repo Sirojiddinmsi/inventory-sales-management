@@ -21,6 +21,7 @@ type UpdatePurchaseInput = Omit<CreatePurchaseInput, "createdBy"> & {
 
 type PurchaseRow = {
   id: string;
+  purchase_document_id: string;
   supplier_id: string | null;
   product_id: string;
   quantity: number;
@@ -49,68 +50,137 @@ export class PurchaseRepository {
     sortBy: string;
     sortOrder: "asc" | "desc";
   }) {
-    const conditions: string[] = [];
+    const conditions: string[] = [`EXISTS (
+      SELECT 1 FROM purchases active_purchase
+      WHERE active_purchase.purchase_document_id = pd.id
+        AND active_purchase.deleted_at IS NULL
+    )`];
     const values: unknown[] = [];
-    conditions.push("pu.deleted_at IS NULL");
 
     if (input.search) {
       values.push(`%${input.search}%`);
-      conditions.push(`(p.name ILIKE $${values.length} OR p.code ILIKE $${values.length}
-        OR s.name ILIKE $${values.length})`);
+      conditions.push(`(
+        pd.document_number ILIKE $${values.length}
+        OR EXISTS (
+          SELECT 1
+          FROM purchases search_purchase
+          JOIN products search_product ON search_product.id = search_purchase.product_id
+          LEFT JOIN suppliers search_supplier ON search_supplier.id = search_purchase.supplier_id
+          WHERE search_purchase.purchase_document_id = pd.id
+            AND search_purchase.deleted_at IS NULL
+            AND (
+              search_product.name ILIKE $${values.length}
+              OR search_product.code ILIKE $${values.length}
+              OR search_supplier.name ILIKE $${values.length}
+            )
+        )
+      )`);
     }
-    for (const [column, value] of [
-      ["pu.supplier_id", input.supplierId],
-      ["pu.product_id", input.productId]
-    ] as const) {
-      if (value) {
-        values.push(value);
-        conditions.push(`${column} = $${values.length}`);
-      }
+    if (input.supplierId) {
+      values.push(input.supplierId);
+      conditions.push(`EXISTS (
+        SELECT 1 FROM purchases supplier_purchase
+        WHERE supplier_purchase.purchase_document_id = pd.id
+          AND supplier_purchase.deleted_at IS NULL
+          AND supplier_purchase.supplier_id = $${values.length}
+      )`);
+    }
+    if (input.productId) {
+      values.push(input.productId);
+      conditions.push(`EXISTS (
+        SELECT 1 FROM purchases product_purchase
+        WHERE product_purchase.purchase_document_id = pd.id
+          AND product_purchase.deleted_at IS NULL
+          AND product_purchase.product_id = $${values.length}
+      )`);
     }
     if (input.from) {
       values.push(input.from);
-      conditions.push(`pu.purchased_at >= $${values.length}`);
+      conditions.push(`pd.purchased_at >= $${values.length}`);
     }
     if (input.to) {
       values.push(input.to);
-      conditions.push(`pu.purchased_at <= $${values.length}`);
+      conditions.push(`pd.purchased_at <= $${values.length}`);
     }
 
     const sortColumns: Record<string, string> = {
-      purchased_at: "pu.purchased_at",
-      total_cost: "pu.total_cost",
-      quantity: "pu.quantity"
+      purchased_at: "pd.purchased_at",
+      total_cost: "document_stats.total_amount",
+      quantity: "document_stats.total_quantity"
     };
-    const orderBy = sortColumns[input.sortBy] ?? "pu.purchased_at";
+    const orderBy = sortColumns[input.sortBy] ?? "pd.purchased_at";
     const direction = input.sortOrder === "asc" ? "ASC" : "DESC";
     values.push(input.limit, (input.page - 1) * input.limit);
 
-    const result = await query(
-      `SELECT pu.*, p.name AS product_name, p.code AS product_code,
-              s.name AS supplier_name, u.name AS created_by_name,
-              editor.name AS updated_by_name,
-              COALESCE(pu.location, p.location) AS product_location,
+    const documentsResult = await query(
+      `SELECT pd.id, pd.document_number, pd.purchased_at, pd.created_at,
+              pd.created_by, u.name AS created_by_name,
+              document_stats.line_count,
+              document_stats.total_quantity,
+              document_stats.total_amount,
+              document_stats.supplier_count,
+              CASE WHEN document_stats.supplier_count = 1
+                   THEN document_stats.supplier_name
+                   ELSE NULL
+              END AS supplier_name,
               COUNT(*) OVER()::int AS total_count
-       FROM purchases pu
-       JOIN products p ON p.id = pu.product_id
-       LEFT JOIN suppliers s ON s.id = pu.supplier_id
-       JOIN users u ON u.id = pu.created_by
-       LEFT JOIN users editor ON editor.id = pu.updated_by
-       ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
-       ORDER BY ${orderBy} ${direction}
+       FROM purchase_documents pd
+       JOIN users u ON u.id = pd.created_by
+       JOIN LATERAL (
+         SELECT COUNT(*)::int AS line_count,
+                COALESCE(SUM(pu.quantity), 0) AS total_quantity,
+                COALESCE(SUM(pu.total_cost), 0) AS total_amount,
+                COUNT(DISTINCT COALESCE(pu.supplier_id::text, 'NONE'))::int AS supplier_count,
+                MIN(s.name) AS supplier_name
+         FROM purchases pu
+         LEFT JOIN suppliers s ON s.id = pu.supplier_id
+         WHERE pu.purchase_document_id = pd.id
+           AND pu.deleted_at IS NULL
+       ) document_stats ON document_stats.line_count > 0
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ${orderBy} ${direction}, pd.id ${direction}
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values
     );
 
+    const documentIds = documentsResult.rows.map((document) => document.id);
+    const itemsResult = documentIds.length
+      ? await query(
+          `SELECT pu.*, p.name AS product_name, p.code AS product_code,
+                  p.unit, s.name AS supplier_name,
+                  u.name AS created_by_name, editor.name AS updated_by_name,
+                  COALESCE(pu.location, p.location) AS product_location
+           FROM purchases pu
+           JOIN products p ON p.id = pu.product_id
+           LEFT JOIN suppliers s ON s.id = pu.supplier_id
+           JOIN users u ON u.id = pu.created_by
+           LEFT JOIN users editor ON editor.id = pu.updated_by
+           WHERE pu.purchase_document_id = ANY($1::uuid[])
+             AND pu.deleted_at IS NULL
+           ORDER BY pu.purchased_at ASC, pu.created_at ASC, pu.id ASC`,
+          [documentIds]
+        )
+      : { rows: [] };
+    const itemsByDocument = new Map<string, typeof itemsResult.rows>();
+    for (const item of itemsResult.rows) {
+      const items = itemsByDocument.get(item.purchase_document_id) ?? [];
+      items.push(item);
+      itemsByDocument.set(item.purchase_document_id, items);
+    }
+
     return {
-      rows: result.rows.map(({ total_count: _total, ...row }) => row),
-      total: Number(result.rows[0]?.total_count ?? 0)
+      rows: documentsResult.rows.map(({ total_count: _total, ...document }) => ({
+        ...document,
+        items: itemsByDocument.get(document.id) ?? []
+      })),
+      total: Number(documentsResult.rows[0]?.total_count ?? 0)
     };
   }
 
   create(input: CreatePurchaseInput) {
     return withTransaction(async (client) => {
-      return this.createOne(client, input);
+      const document = await this.createDocument(client, [input], input.createdBy);
+      return this.createOne(client, input, document.id);
     });
   }
 
@@ -225,6 +295,7 @@ export class PurchaseRepository {
       }
 
       await this.writeAudit(client, id, "UPDATE", existing, updated, input.editedBy);
+      await this.syncDocument(client, existing.purchase_document_id);
       return updated;
     });
   }
@@ -262,6 +333,7 @@ export class PurchaseRepository {
       );
 
       await this.writeAudit(client, id, "DELETE", existing, deleted, editedBy);
+      await this.syncDocument(client, existing.purchase_document_id);
       return { deleted: true, id };
     });
   }
@@ -277,14 +349,17 @@ export class PurchaseRepository {
         await this.ensureSuppliers(client, [...new Set(supplierIds)]);
       }
 
+      const document = await this.createDocument(client, rows, createdBy);
       const created = [];
       let totalAmount = 0;
       for (const row of rows) {
-        const purchase = await this.createOne(client, { ...row, createdBy });
+        const purchase = await this.createOne(client, { ...row, createdBy }, document.id);
         created.push(purchase);
         totalAmount += Number(purchase.total_cost);
       }
       return {
+        documentId: document.id,
+        documentNumber: document.document_number,
         totalRows: created.length,
         totalAmount,
         rows: created
@@ -365,29 +440,37 @@ export class PurchaseRepository {
     if (supplierIds.length > 0) {
       await this.ensureSuppliers(client, [...new Set(supplierIds)]);
     }
+    const document = await this.createDocument(client, rows, rows[0]!.createdBy);
     const created = [];
     let totalAmount = 0;
     for (const row of rows) {
-      const purchase = await this.createOne(client, row);
+      const purchase = await this.createOne(client, row, document.id);
       created.push(purchase);
       totalAmount += Number(purchase.total_cost);
     }
     return {
+      documentId: document.id,
+      documentNumber: document.document_number,
       rows: created,
       totalAmount
     };
   }
 
-  private async createOne(client: PoolClient, input: CreatePurchaseInput) {
+  private async createOne(
+    client: PoolClient,
+    input: CreatePurchaseInput,
+    purchaseDocumentId: string
+  ) {
     const totalCost = input.quantity * input.purchasePrice;
 
     const result = await client.query(
       `INSERT INTO purchases (
-         supplier_id, product_id, quantity, purchase_price, total_cost,
-         purchased_at, note, created_by
-       ) VALUES ($1,$2,$3,$4,$5,COALESCE($6::timestamptz, NOW()),$7,$8)
+         purchase_document_id, supplier_id, product_id, quantity,
+         purchase_price, total_cost, purchased_at, note, created_by
+       ) VALUES ($1,$2,$3,$4,$5,$6,COALESCE($7::timestamptz, NOW()),$8,$9)
        RETURNING *`,
       [
+        purchaseDocumentId,
         input.supplierId ?? null,
         input.productId,
         input.quantity,
@@ -426,6 +509,53 @@ export class PurchaseRepository {
     );
 
     return purchase;
+  }
+
+  private async createDocument(
+    client: PoolClient,
+    rows: CreatePurchaseInput[],
+    createdBy: string
+  ) {
+    const supplierKeys = new Set(rows.map((row) => row.supplierId ?? "NONE"));
+    const supplierId = supplierKeys.size === 1 && !supplierKeys.has("NONE")
+      ? rows[0]!.supplierId
+      : null;
+    const purchasedAt = rows
+      .map((row) => row.purchasedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()[0];
+    const result = await client.query<{ id: string; document_number: string }>(
+      `INSERT INTO purchase_documents (supplier_id, purchased_at, created_by)
+       VALUES ($1,COALESCE($2::timestamptz,NOW()),$3)
+       RETURNING id, document_number`,
+      [supplierId ?? null, purchasedAt ?? null, createdBy]
+    );
+    return result.rows[0]!;
+  }
+
+  private async syncDocument(client: PoolClient, documentId: string) {
+    await client.query(
+      `WITH document_items AS (
+         SELECT
+           COUNT(*)::int AS line_count,
+           MIN(purchased_at) AS purchased_at,
+           COUNT(DISTINCT COALESCE(supplier_id::text, 'NONE'))::int AS supplier_count,
+           MAX(supplier_id::text) FILTER (WHERE supplier_id IS NOT NULL) AS supplier_id
+         FROM purchases
+         WHERE purchase_document_id = $1 AND deleted_at IS NULL
+       )
+       UPDATE purchase_documents pd
+       SET purchased_at = COALESCE(document_items.purchased_at, pd.purchased_at),
+           supplier_id = CASE
+             WHEN document_items.supplier_count = 1
+               THEN document_items.supplier_id::uuid
+             ELSE NULL
+           END,
+           updated_at = NOW()
+       FROM document_items
+       WHERE pd.id = $1`,
+      [documentId]
+    );
   }
 
   private async lockProduct(client: PoolClient, productId: string) {
