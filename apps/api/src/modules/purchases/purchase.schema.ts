@@ -21,6 +21,14 @@ export const purchaseCreateSchema = z.object({
 
 export const purchaseUpdateSchema = purchaseCreateSchema;
 
+export const purchaseDocumentUpdateSchema = z.object({
+  rows: z.array(
+    purchaseCreateSchema.extend({
+      id: z.uuid().optional()
+    })
+  ).min(1).max(200)
+});
+
 export const purchaseBulkRowSchema = z.object({
   supplierId: z.uuid().nullish(),
   productId: z.uuid(),

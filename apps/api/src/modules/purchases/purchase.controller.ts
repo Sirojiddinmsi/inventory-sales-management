@@ -22,6 +22,14 @@ export class PurchaseController {
     res.json(await purchaseService.update(req.params.id as string, req.body, req.user!.id));
   }
 
+  async updateDocument(req: Request, res: Response) {
+    res.json(await purchaseService.updateDocument(
+      req.params.id as string,
+      req.body.rows,
+      req.user!.id
+    ));
+  }
+
   async remove(req: Request, res: Response) {
     res.json(await purchaseService.remove(req.params.id as string, req.user!.id));
   }

@@ -37,6 +37,18 @@ export class PurchaseService {
     return purchaseRepository.update(id, { ...input, editedBy: userId });
   }
 
+  updateDocument(
+    id: string,
+    rows: Array<Omit<Parameters<typeof purchaseRepository.updateDocument>[1][number], "editedBy">>,
+    userId: string
+  ) {
+    return purchaseRepository.updateDocument(
+      id,
+      rows.map((row) => ({ ...row, editedBy: userId })),
+      userId
+    );
+  }
+
   remove(id: string, userId: string) {
     return purchaseRepository.remove(id, userId);
   }
