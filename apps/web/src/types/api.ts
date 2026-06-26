@@ -110,6 +110,7 @@ export type PurchaseDocument = {
 
 export type SupplierReturn = {
   id: string;
+  supplier_return_document_id: string;
   product_id: string;
   product_name: string;
   product_code: string;
@@ -123,6 +124,22 @@ export type SupplierReturn = {
   note: string | null;
   created_by_name: string;
   created_at: string;
+};
+
+export type SupplierReturnDocument = {
+  id: string;
+  document_number: string;
+  returned_at: string;
+  note: string | null;
+  created_by: string;
+  created_by_name: string;
+  created_at: string;
+  line_count: number;
+  total_quantity: number;
+  total_fifo_cost: number;
+  total_agreed_return_amount: number;
+  total_supplier_return_profit: number;
+  items: SupplierReturn[];
 };
 
 export type ProductMovementType = "arrival" | "sale" | "return" | "supplier_return" | "adjustment";
