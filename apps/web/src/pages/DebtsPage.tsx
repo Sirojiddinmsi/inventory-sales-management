@@ -20,14 +20,36 @@ import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
 import { api } from "../lib/api";
 import { date, dateTime, money } from "../lib/format";
-import type { Debt, DebtPayment, DebtPaymentMethod, DebtStatus, Paginated } from "../types/api";
+import type { Debt, DebtPayment, DebtPaymentMethod, DebtStatus, DebtSummary, Paginated } from "../types/api";
 
 type DebtDetails = Debt & {
+  items: Array<{
+    id: string;
+    product_id: string;
+    product_name: string;
+    product_code: string;
+    unit: string;
+    quantity: number;
+    sale_price: number;
+    discount: number;
+    total_amount: number;
+  }>;
   payments: DebtPayment[];
 };
 
 const debtTone = (status: DebtStatus) =>
-  status === "PAID" ? "success" : status === "PARTIALLY_PAID" ? "warning" : "danger";
+  status === "PAID" ? "success" : status === "PARTIALLY_PAID" ? "warning" : status === "OVERDUE" ? "danger" : "warning";
+
+const debtStatusText = (status: DebtStatus, tr: (uz: string, ru: string) => string) =>
+  status === "PAID"
+    ? tr("To‘langan", "Оплачен")
+    : status === "PARTIALLY_PAID"
+      ? tr("Qisman to‘langan", "Частично оплачен")
+      : status === "OVERDUE"
+        ? tr("Muddati o‘tgan", "Просрочен")
+        : tr("To‘lanmagan", "Не оплачен");
+
+type DebtFilter = "active" | "paid" | "archive" | "overdue" | "partial" | "all";
 
 export function DebtsPage() {
   const queryClient = useQueryClient();
@@ -36,8 +58,7 @@ export function DebtsPage() {
   const isAdmin = user?.role === "ADMIN";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [archived, setArchived] = useState(false);
+  const [filter, setFilter] = useState<DebtFilter>("active");
   const [selected, setSelected] = useState<Debt | null>(null);
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<DebtPaymentMethod>("CASH");
@@ -50,10 +71,20 @@ export function DebtsPage() {
   const [purgeDebt, setPurgeDebt] = useState<Debt | null>(null);
 
   const debts = useQuery({
-    queryKey: ["debts", page, search, status, archived],
+    queryKey: ["debts", page, search, filter],
     queryFn: () => api<Paginated<Debt>>("/debts", {
-      params: { page, limit: 15, search, status, archived }
+      params: {
+        page,
+        limit: 15,
+        search,
+        filter,
+        archived: filter === "archive"
+      }
     })
+  });
+  const summary = useQuery({
+    queryKey: ["debts", "summary"],
+    queryFn: () => api<DebtSummary>("/debts/summary")
   });
   const details = useQuery({
     queryKey: ["debt", selected?.id],
@@ -61,7 +92,7 @@ export function DebtsPage() {
     enabled: Boolean(selected)
   });
 
-  useEffect(() => setPage(1), [search, status, archived]);
+  useEffect(() => setPage(1), [search, filter]);
 
   const refreshDebts = () => {
     void queryClient.invalidateQueries({ queryKey: ["debts"] });
@@ -139,6 +170,7 @@ export function DebtsPage() {
 
   const current = details.data ?? selected;
   const remaining = Number(current?.remaining_amount ?? 0);
+  const isArchiveView = filter === "archive";
   const mixedTotal =
     Number(cashAmount || 0) + Number(cardAmount || 0) + Number(transferAmount || 0);
 
@@ -154,17 +186,35 @@ export function DebtsPage() {
   return (
     <>
       <PageHeader
-        title={archived ? tr("Qarzlar arxivi", "Архив долгов") : tr("Qarzlar", "Долги")}
-        description={archived
+        title={isArchiveView ? tr("Qarzlar arxivi", "Архив долгов") : tr("Qarzlar", "Долги")}
+        description={isArchiveView
           ? tr("O‘chirilgan qarz yozuvlari 30 kun saqlanadi.", "Удаленные долги хранятся 30 дней.")
           : tr("Mijoz qarzlari, muddatlari va to‘lov tarixini nazorat qiling.", "Контролируйте долги клиентов, сроки и историю платежей.")}
         actions={isAdmin && (
-          <Button variant="secondary" onClick={() => setArchived((value) => !value)}>
-            {archived ? <Undo2 size={17} /> : <Archive size={17} />}
-            {archived ? tr("Faol qarzlar", "Активные долги") : tr("Arxiv", "Архив")}
+          <Button variant="secondary" onClick={() => setFilter(isArchiveView ? "active" : "archive")}>
+            {isArchiveView ? <Undo2 size={17} /> : <Archive size={17} />}
+            {isArchiveView ? tr("Faol qarzlar", "Активные долги") : tr("Arxiv", "Архив")}
           </Button>
         )}
       />
+      <div className="stats-grid">
+        <Card className="stat-card">
+          <span>{tr("Faol qarz jami", "Активный долг")}</span>
+          <strong>{money(summary.data?.total_active_debt)}</strong>
+        </Card>
+        <Card className="stat-card">
+          <span>{tr("To‘langan qarzlar", "Оплаченные долги")}</span>
+          <strong>{money(summary.data?.paid_debts)}</strong>
+        </Card>
+        <Card className="stat-card">
+          <span>{tr("Muddati o‘tgan", "Просроченные")}</span>
+          <strong>{money(summary.data?.overdue_debts)}</strong>
+        </Card>
+        <Card className="stat-card">
+          <span>{tr("Qisman to‘langan", "Частично оплаченные")}</span>
+          <strong>{money(summary.data?.partially_paid_debts)}</strong>
+        </Card>
+      </div>
       <Card>
         <div className="filters">
           <SearchInput
@@ -172,14 +222,16 @@ export function DebtsPage() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder={tr("Mijoz yoki telefon bo‘yicha...", "Клиент или телефон...")}
           />
-          <Select value={status} onChange={(event) => setStatus(event.target.value)}>
-            <option value="">{tr("Barcha holatlar", "Все статусы")}</option>
-            <option value="UNPAID">{tr("To‘lanmagan", "Не оплачен")}</option>
-            <option value="PARTIALLY_PAID">{tr("Qisman to‘langan", "Оплачен частично")}</option>
-            <option value="PAID">{tr("To‘langan", "Оплачен")}</option>
+          <Select value={filter} onChange={(event) => setFilter(event.target.value as DebtFilter)}>
+            <option value="active">{tr("Faol qarzlar", "Активные")}</option>
+            <option value="paid">{tr("To‘langan / arxiv", "Оплаченные / архив")}</option>
+            <option value="overdue">{tr("Muddati o‘tgan", "Просроченные")}</option>
+            <option value="partial">{tr("Qisman to‘langan", "Частично оплаченные")}</option>
+            <option value="all">{tr("Barchasini ko‘rsatish", "Показать все")}</option>
+            {isAdmin && <option value="archive">{tr("Arxiv", "Архив")}</option>}
           </Select>
         </div>
-        <DataTable loading={debts.isLoading} empty={!debts.data?.data.length} minWidth={archived ? 1080 : 950}>
+        <DataTable loading={debts.isLoading} empty={!debts.data?.data.length} minWidth={isArchiveView ? 1080 : 950}>
           <thead>
             <tr>
               <th>{tr("Mijoz", "Клиент")}</th>
@@ -189,7 +241,7 @@ export function DebtsPage() {
               <th>{tr("Qoldiq", "Остаток")}</th>
               <th>{tr("Muddat", "Срок")}</th>
               <th>{tr("Holat", "Статус")}</th>
-              {archived && <th>{tr("Arxiv muddati", "Срок архива")}</th>}
+              {isArchiveView && <th>{tr("Arxiv muddati", "Срок архива")}</th>}
               <th />
             </tr>
           </thead>
@@ -212,20 +264,23 @@ export function DebtsPage() {
                 <td data-label={tr("Muddat", "Срок")}>{date(debt.due_date)}</td>
                 <td data-label={tr("Holat", "Статус")}>
                   <Badge tone={debtTone(debt.status)}>
-                    {debt.status === "UNPAID"
-                      ? tr("To‘lanmagan", "Не оплачен")
-                      : debt.status === "PARTIALLY_PAID"
-                        ? tr("Qisman to‘langan", "Оплачен частично")
-                        : tr("To‘langan", "Оплачен")}
+                    {debtStatusText(debt.status, tr)}
                   </Badge>
                 </td>
-                {archived && <td data-label={tr("Arxiv muddati", "Срок архива")}>{dateTime(debt.archive_expires_at)}</td>}
+                {isArchiveView && <td data-label={tr("Arxiv muddati", "Срок архива")}>{dateTime(debt.archive_expires_at)}</td>}
                 <td data-label={tr("Amallar", "Действия")}>
-                  {!archived && (
+                  {!isArchiveView && (
                     <div className="row-actions">
-                      <Button variant="secondary" size="sm" onClick={() => openDebt(debt)}>
-                        <HandCoins size={14} /> {tr("To‘lov", "Оплата")}
-                      </Button>
+                      {Number(debt.remaining_amount) > 0 && (
+                        <Button variant="secondary" size="sm" onClick={() => openDebt(debt)}>
+                          <HandCoins size={14} /> {tr("To‘lov", "Оплата")}
+                        </Button>
+                      )}
+                      {Number(debt.remaining_amount) <= 0 && (
+                        <Button variant="secondary" size="sm" onClick={() => openDebt(debt)}>
+                          {tr("Batafsil", "Подробнее")}
+                        </Button>
+                      )}
                       {isAdmin && (
                         <button
                           className="icon-button danger-icon"
@@ -237,7 +292,7 @@ export function DebtsPage() {
                       )}
                     </div>
                   )}
-                  {archived && isAdmin && (
+                  {isArchiveView && isAdmin && (
                     <div className="row-actions">
                       <button
                         className="icon-button"
@@ -285,6 +340,26 @@ export function DebtsPage() {
               <div><span>{tr("Qoldiq", "Остаток")}</span><strong>{money(current?.remaining_amount)}</strong></div>
             </div>
             {current?.phone && <div className="inline-note"><Phone size={15} /> {current.phone}</div>}
+            <div className="inline-note">
+              <strong>{tr("Holat", "Статус")}:</strong>
+              <Badge tone={debtTone(current?.status ?? "UNPAID")}>
+                {debtStatusText(current?.status ?? "UNPAID", tr)}
+              </Badge>
+            </div>
+            <h3 className="subheading">{tr("Mahsulotlar", "Товары")}</h3>
+            <div className="payment-history">
+              {details.isLoading && <span>{tr("Yuklanmoqda...", "Загрузка...")}</span>}
+              {!details.isLoading && !details.data?.items.length && <span>{tr("Mahsulotlar topilmadi", "Товары не найдены")}</span>}
+              {details.data?.items.map((item) => (
+                <div key={item.id}>
+                  <span>
+                    <strong>{item.product_name}</strong>
+                    <small>{item.product_code} · {item.quantity} {item.unit}</small>
+                  </span>
+                  <span>{money(item.total_amount)}</span>
+                </div>
+              ))}
+            </div>
             <h3 className="subheading">{tr("To‘lov tarixi", "История платежей")}</h3>
             <div className="payment-history">
               {details.isLoading && <span>{tr("Yuklanmoqda...", "Загрузка...")}</span>}

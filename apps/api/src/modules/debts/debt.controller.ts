@@ -10,6 +10,10 @@ export class DebtController {
     res.json(await debtService.get(String(req.params.id)));
   }
 
+  async summary(_req: Request, res: Response) {
+    res.json(await debtService.summary());
+  }
+
   async pay(req: Request, res: Response) {
     res.status(201).json(await debtService.pay(String(req.params.id), req.body, req.user!.id));
   }

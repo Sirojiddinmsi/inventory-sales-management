@@ -14,6 +14,10 @@ export class DebtService {
     return debt;
   }
 
+  summary() {
+    return debtRepository.summary();
+  }
+
   pay(
     debtId: string,
     input: Omit<Parameters<typeof debtRepository.pay>[0], "debtId" | "receivedBy">,

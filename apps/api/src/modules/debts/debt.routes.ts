@@ -9,6 +9,7 @@ import { debtArchiveSchema, debtListSchema, debtPaymentSchema } from "./debt.sch
 export const debtRouter = Router();
 
 debtRouter.get("/", validate(debtListSchema, "query"), asyncHandler(debtController.list));
+debtRouter.get("/summary", asyncHandler(debtController.summary));
 debtRouter.get("/:id", validate(idParamSchema, "params"), asyncHandler(debtController.get));
 debtRouter.post(
   "/:id/payments",
