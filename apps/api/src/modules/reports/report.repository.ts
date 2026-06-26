@@ -116,7 +116,6 @@ export class ReportRepository {
       expenseConditions.push(`spent_at <= $${expenseValues.length}`);
     }
     const standaloneDebtPaymentWhere = debtPaymentWhere(filter);
-    const combinedDebtPaymentWhere = debtPaymentWhere(filter, where.values.length);
     const returnsWhere = supplierReturnWhere(filter);
 
     const [summary, soldProducts, daily, byProduct, byCategory, byPayment, debtPayments, expenses, supplierReturns] = await Promise.all([
@@ -206,36 +205,16 @@ export class ReportRepository {
         where.values
       ),
       query(
-        `WITH finance_rows AS (
-           SELECT
-             s.payment_type::text AS payment_type,
-             COUNT(*)::int AS sale_count,
-             COALESCE(SUM(s.total_amount - s.returned_amount), 0) AS total_sales,
-             COALESCE(SUM(s.profit - s.returned_profit), 0) AS profit
-           FROM sales s
-           ${where.sql}
-           GROUP BY s.payment_type
-
-           UNION ALL
-
-           SELECT
-             dp.payment_method::text AS payment_type,
-             COUNT(*)::int AS sale_count,
-             COALESCE(SUM(dp.amount), 0) AS total_sales,
-             0::numeric AS profit
-           FROM debt_payments dp
-           ${combinedDebtPaymentWhere.sql}
-           GROUP BY dp.payment_method
-         )
-         SELECT
-           payment_type,
-           SUM(sale_count)::int AS sale_count,
-           SUM(total_sales) AS total_sales,
-           SUM(profit) AS profit
-         FROM finance_rows
-         GROUP BY payment_type
-         ORDER BY payment_type`,
-        [...where.values, ...combinedDebtPaymentWhere.values]
+        `SELECT
+           s.payment_type::text AS payment_type,
+           COUNT(*)::int AS sale_count,
+           COALESCE(SUM(s.total_amount - s.returned_amount), 0) AS total_sales,
+           COALESCE(SUM(s.profit - s.returned_profit), 0) AS profit
+         FROM sales s
+         ${where.sql}
+         GROUP BY s.payment_type
+         ORDER BY s.payment_type`,
+        where.values
       ),
       query(
         `SELECT

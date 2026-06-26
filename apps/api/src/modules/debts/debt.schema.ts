@@ -3,6 +3,7 @@ import { paginationSchema } from "../../shared/pagination.js";
 
 export const debtListSchema = paginationSchema.extend({
   status: z.enum(["UNPAID", "PARTIALLY_PAID", "PAID"]).optional(),
+  filter: z.enum(["active", "paid", "archive", "overdue", "partial", "all"]).default("active"),
   dueFrom: z.iso.date().optional(),
   dueTo: z.iso.date().optional(),
   archived: z.enum(["true", "false"]).transform((value) => value === "true").default(false),

@@ -2,7 +2,7 @@ export type UserRole = "ADMIN" | "SELLER";
 export type PaymentType = "CASH" | "CARD" | "DEBT";
 export type DebtPaymentMethod = "CASH" | "CARD" | "TRANSFER" | "MIXED";
 export type FinancePaymentMethod = PaymentType | DebtPaymentMethod;
-export type DebtStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
+export type DebtStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID" | "OVERDUE";
 
 export type User = {
   id: string;
@@ -251,6 +251,10 @@ export type Sale = {
   fifo_cost: number;
   returned_fifo_cost: number;
   payment_type: PaymentType;
+  debt_id?: string | null;
+  debt_status?: DebtStatus | null;
+  debt_paid_amount?: number | null;
+  debt_remaining_amount?: number | null;
   profit: number;
   returned_profit: number;
   net_profit: number;
@@ -331,6 +335,13 @@ export type DebtPayment = {
   cash_amount: number;
   card_amount: number;
   transfer_amount: number;
+};
+
+export type DebtSummary = {
+  total_active_debt: number;
+  paid_debts: number;
+  overdue_debts: number;
+  partially_paid_debts: number;
 };
 
 export type Expense = {

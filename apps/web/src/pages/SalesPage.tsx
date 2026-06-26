@@ -40,6 +40,7 @@ import {
 } from "../lib/format";
 import type {
   Contact,
+  DebtStatus,
   MeasurementUnit,
   Paginated,
   PaymentType,
@@ -123,6 +124,18 @@ function truncateNote(note: string, maxLength = 72) {
   if (compact.length <= maxLength) return compact;
   return `${compact.slice(0, maxLength - 1)}…`;
 }
+
+const debtStatusLabel = (status: DebtStatus | null | undefined, tr: (uz: string, ru: string) => string) =>
+  status === "PAID"
+    ? tr("To‘langan", "Оплачен")
+    : status === "PARTIALLY_PAID"
+      ? tr("Qisman to‘langan", "Частично оплачен")
+      : status === "OVERDUE"
+        ? tr("Muddati o‘tgan", "Просрочен")
+        : tr("To‘lanmagan", "Не оплачен");
+
+const debtStatusTone = (status: DebtStatus | null | undefined) =>
+  status === "PAID" ? "success" : status === "OVERDUE" ? "danger" : "warning";
 
 const newLine = (): SaleLine => ({
   key: crypto.randomUUID(),
@@ -686,12 +699,12 @@ export function SalesPage() {
                 <td data-label={tr("Sana", "Дата")}>{dateTime(sale.sold_at)}</td>
                 <td data-label={tr("Mijoz", "Клиент")}>{sale.customer_name || tr("Noma’lum mijoz", "Клиент не указан")}</td>
                 <td data-label={tr("To‘lov", "Оплата")}>
-                  <Badge tone={sale.payment_type === "DEBT" ? "warning" : sale.payment_type === "CARD" ? "info" : "success"}>
+                  <Badge tone={sale.payment_type === "DEBT" ? debtStatusTone(sale.debt_status) : sale.payment_type === "CARD" ? "info" : "success"}>
                     {sale.payment_type === "CASH"
                       ? tr("Naqd", "Наличные")
                       : sale.payment_type === "CARD"
                         ? tr("Plastik", "Карта")
-                        : tr("Qarz", "В долг")}
+                        : `${tr("Qarz", "В долг")} — ${debtStatusLabel(sale.debt_status, tr)}`}
                   </Badge>
                 </td>
                 <td data-label={tr("Jami", "Сумма")}><strong>{money(sale.net_total_amount)}</strong></td>

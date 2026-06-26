@@ -7,14 +7,16 @@ export class DebtRepository {
     limit: number;
     search?: string;
     status?: "UNPAID" | "PARTIALLY_PAID" | "PAID";
+    filter: "active" | "paid" | "archive" | "overdue" | "partial" | "all";
     dueFrom?: string;
     dueTo?: string;
     archived: boolean;
     sortBy: string;
     sortOrder: "asc" | "desc";
   }) {
+    const showArchive = input.archived || input.filter === "archive";
     const conditions: string[] = [
-      input.archived ? "d.archived_at IS NOT NULL" : "d.archived_at IS NULL"
+      showArchive ? "d.archived_at IS NOT NULL" : "d.archived_at IS NULL"
     ];
     const values: unknown[] = [];
     if (input.search) {
@@ -24,6 +26,17 @@ export class DebtRepository {
     if (input.status) {
       values.push(input.status);
       conditions.push(`d.status = $${values.length}`);
+    }
+    if (!showArchive) {
+      if (input.filter === "active") {
+        conditions.push("d.remaining_amount > 0");
+      } else if (input.filter === "paid") {
+        conditions.push("d.remaining_amount = 0");
+      } else if (input.filter === "overdue") {
+        conditions.push("d.remaining_amount > 0 AND d.due_date IS NOT NULL AND d.due_date < CURRENT_DATE");
+      } else if (input.filter === "partial") {
+        conditions.push("d.remaining_amount > 0 AND d.paid_amount > 0");
+      }
     }
     if (input.dueFrom) {
       values.push(input.dueFrom);
@@ -44,6 +57,12 @@ export class DebtRepository {
 
     const result = await query(
       `SELECT d.*, s.invoice_number,
+              CASE
+                WHEN d.remaining_amount = 0 THEN 'PAID'
+                WHEN d.remaining_amount > 0 AND d.due_date IS NOT NULL AND d.due_date < CURRENT_DATE THEN 'OVERDUE'
+                WHEN d.paid_amount > 0 AND d.remaining_amount > 0 THEN 'PARTIALLY_PAID'
+                ELSE 'UNPAID'
+              END AS computed_status,
               CASE WHEN d.archived_at IS NOT NULL
                 THEN d.archived_at + INTERVAL '30 days'
                 ELSE NULL
@@ -56,14 +75,48 @@ export class DebtRepository {
       values
     );
     return {
-      rows: result.rows.map(({ total_count: _total, ...row }) => row),
+      rows: result.rows.map(({ total_count: _total, computed_status, ...row }) => ({
+        ...row,
+        status: computed_status
+      })),
       total: Number(result.rows[0]?.total_count ?? 0)
     };
+  }
+
+  async summary() {
+    const result = await query(
+      `SELECT
+         COALESCE(SUM(d.remaining_amount) FILTER (
+           WHERE d.archived_at IS NULL AND d.remaining_amount > 0
+         ), 0) AS total_active_debt,
+         COALESCE(SUM(d.paid_amount) FILTER (
+           WHERE d.remaining_amount = 0
+         ), 0) AS paid_debts,
+         COALESCE(SUM(d.remaining_amount) FILTER (
+           WHERE d.archived_at IS NULL
+             AND d.remaining_amount > 0
+             AND d.due_date IS NOT NULL
+             AND d.due_date < CURRENT_DATE
+         ), 0) AS overdue_debts,
+         COALESCE(SUM(d.remaining_amount) FILTER (
+           WHERE d.archived_at IS NULL
+             AND d.remaining_amount > 0
+             AND d.paid_amount > 0
+         ), 0) AS partially_paid_debts
+       FROM debts d`
+    );
+    return result.rows[0];
   }
 
   async get(id: string) {
     const debtResult = await query(
       `SELECT d.*, s.invoice_number,
+              CASE
+                WHEN d.remaining_amount = 0 THEN 'PAID'
+                WHEN d.remaining_amount > 0 AND d.due_date IS NOT NULL AND d.due_date < CURRENT_DATE THEN 'OVERDUE'
+                WHEN d.paid_amount > 0 AND d.remaining_amount > 0 THEN 'PARTIALLY_PAID'
+                ELSE 'UNPAID'
+              END AS computed_status,
               CASE WHEN d.archived_at IS NOT NULL
                 THEN d.archived_at + INTERVAL '30 days'
                 ELSE NULL
@@ -72,13 +125,25 @@ export class DebtRepository {
       [id]
     );
     if (!debtResult.rows[0]) return null;
+    const items = await query(
+      `SELECT si.id, si.product_id, p.name AS product_name, p.code AS product_code,
+              si.unit, si.sale_quantity AS quantity, si.sale_price, si.discount,
+              si.total_amount
+       FROM sale_items si
+       JOIN products p ON p.id = si.product_id
+       JOIN debts d ON d.sale_id = si.sale_id
+       WHERE d.id = $1
+       ORDER BY p.name`,
+      [id]
+    );
     const payments = await query(
       `SELECT dp.*, u.name AS received_by_name
        FROM debt_payments dp JOIN users u ON u.id = dp.received_by
        WHERE dp.debt_id = $1 ORDER BY dp.paid_at DESC`,
       [id]
     );
-    return { ...debtResult.rows[0], payments: payments.rows };
+    const { computed_status, ...debt } = debtResult.rows[0];
+    return { ...debt, status: computed_status, items: items.rows, payments: payments.rows };
   }
 
   pay(input: {

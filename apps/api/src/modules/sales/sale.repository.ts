@@ -136,7 +136,17 @@ export class SaleRepository {
 
     const result = await query(
        `SELECT s.*, u.name AS seller_name,
-              (SELECT d.due_date FROM debts d WHERE d.sale_id = s.id) AS due_date,
+              debt.id AS debt_id,
+              debt.paid_amount AS debt_paid_amount,
+              debt.remaining_amount AS debt_remaining_amount,
+              debt.due_date AS due_date,
+              CASE
+                WHEN debt.id IS NULL THEN NULL
+                WHEN debt.remaining_amount = 0 THEN 'PAID'
+                WHEN debt.remaining_amount > 0 AND debt.due_date IS NOT NULL AND debt.due_date < CURRENT_DATE THEN 'OVERDUE'
+                WHEN debt.paid_amount > 0 AND debt.remaining_amount > 0 THEN 'PARTIALLY_PAID'
+                ELSE 'UNPAID'
+              END AS debt_status,
               (s.total_amount - s.returned_amount) AS net_total_amount,
               (s.profit - s.returned_profit) AS net_profit,
               CASE WHEN s.archived_at IS NOT NULL
@@ -146,6 +156,13 @@ export class SaleRepository {
               COUNT(*) OVER()::int AS total_count
        FROM sales s
        JOIN users u ON u.id = s.created_by
+       LEFT JOIN LATERAL (
+         SELECT d.id, d.paid_amount, d.remaining_amount, d.due_date
+         FROM debts d
+         WHERE d.sale_id = s.id
+         ORDER BY d.created_at DESC
+         LIMIT 1
+       ) debt ON TRUE
        ${conditions.length ? `WHERE ${conditions.join(" AND ")}` : ""}
        ORDER BY ${orderBy} ${direction}
        LIMIT $${values.length - 1} OFFSET $${values.length}`,
