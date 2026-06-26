@@ -5,6 +5,7 @@ import { purchaseController } from "./purchase.controller.js";
 import {
   purchaseBulkCreateSchema,
   purchaseCreateSchema,
+  purchaseDocumentUpdateSchema,
   purchaseImportSchema,
   purchaseListSchema,
   purchaseUpdateSchema
@@ -25,5 +26,10 @@ purchaseRouter.post(
   asyncHandler(purchaseController.importRows)
 );
 purchaseRouter.post("/", validate(purchaseCreateSchema), asyncHandler(purchaseController.create));
+purchaseRouter.patch(
+  "/documents/:id",
+  validate(purchaseDocumentUpdateSchema),
+  asyncHandler(purchaseController.updateDocument)
+);
 purchaseRouter.patch("/:id", validate(purchaseUpdateSchema), asyncHandler(purchaseController.update));
 purchaseRouter.delete("/:id", asyncHandler(purchaseController.remove));
