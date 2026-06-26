@@ -10,7 +10,20 @@ export const supplierReturnListSchema = paginationSchema.extend({
 export const supplierReturnCreateSchema = z.object({
   productId: z.uuid(),
   quantity: z.coerce.number().positive(),
-  agreedReturnPricePerUnit: z.coerce.number().positive(),
+  agreedReturnPricePerUnit: z.coerce.number().min(0),
   returnedAt: z.iso.datetime().optional(),
   note: z.string().trim().max(2000).nullish()
+});
+
+export const supplierReturnBulkCreateSchema = z.object({
+  returnedAt: z.iso.datetime().optional(),
+  note: z.string().trim().max(2000).nullish(),
+  rows: z.array(
+    z.object({
+      productId: z.uuid(),
+      quantity: z.coerce.number().positive(),
+      agreedReturnPricePerUnit: z.coerce.number().min(0),
+      note: z.string().trim().max(2000).nullish()
+    })
+  ).min(1).max(200)
 });

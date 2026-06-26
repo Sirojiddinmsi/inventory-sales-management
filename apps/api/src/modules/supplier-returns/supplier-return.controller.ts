@@ -10,8 +10,16 @@ export class SupplierReturnController {
     res.status(201).json(await supplierReturnService.create(req.body, req.user!.id));
   }
 
+  async createDocument(req: Request, res: Response) {
+    res.status(201).json(await supplierReturnService.createDocument(req.body, req.user!.id));
+  }
+
   async remove(req: Request, res: Response) {
     res.json(await supplierReturnService.remove(String(req.params.id), req.user!.id));
+  }
+
+  async removeDocument(req: Request, res: Response) {
+    res.json(await supplierReturnService.removeDocument(String(req.params.id), req.user!.id));
   }
 }
 

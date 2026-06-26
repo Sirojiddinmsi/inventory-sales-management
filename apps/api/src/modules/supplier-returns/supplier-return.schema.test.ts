@@ -19,10 +19,10 @@ describe("supplierReturnCreateSchema", () => {
     expect(supplierReturnCreateSchema.safeParse({ ...validInput, quantity: -1 }).success).toBe(false);
   });
 
-  it("rejects zero and negative agreed return unit prices", () => {
+  it("accepts zero and rejects negative agreed return unit prices", () => {
     expect(
       supplierReturnCreateSchema.safeParse({ ...validInput, agreedReturnPricePerUnit: 0 }).success
-    ).toBe(false);
+    ).toBe(true);
     expect(
       supplierReturnCreateSchema.safeParse({ ...validInput, agreedReturnPricePerUnit: -1 }).success
     ).toBe(false);

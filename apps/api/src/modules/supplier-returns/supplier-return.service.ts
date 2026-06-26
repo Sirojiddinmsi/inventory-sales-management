@@ -14,8 +14,19 @@ export class SupplierReturnService {
     return supplierReturnRepository.create({ ...input, createdBy: userId });
   }
 
+  createDocument(
+    input: Omit<Parameters<typeof supplierReturnRepository.createDocument>[0], "createdBy">,
+    userId: string
+  ) {
+    return supplierReturnRepository.createDocument({ ...input, createdBy: userId });
+  }
+
   remove(id: string, userId: string) {
     return supplierReturnRepository.remove(id, userId);
+  }
+
+  removeDocument(id: string, userId: string) {
+    return supplierReturnRepository.removeDocument(id, userId);
   }
 }
 
