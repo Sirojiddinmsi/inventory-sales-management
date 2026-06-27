@@ -47,11 +47,18 @@ export const saleCreateSchema = z.object({
       path: ["discount"]
     });
   }
-  if (sale.paymentType === "DEBT" && !sale.customerName && !sale.customerId) {
+  if (sale.paymentType === "DEBT" && !sale.customerId) {
     context.addIssue({
       code: "custom",
-      message: "Customer is required for debt sales",
-      path: ["customerName"]
+      message: "An existing customer is required for debt sales",
+      path: ["customerId"]
+    });
+  }
+  if (sale.paymentType === "DEBT" && !sale.dueDate) {
+    context.addIssue({
+      code: "custom",
+      message: "Due date is required for debt sales",
+      path: ["dueDate"]
     });
   }
   if (sale.paymentType === "DEBT" && subtotal - sale.discount <= 0) {

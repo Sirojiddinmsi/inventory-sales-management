@@ -9,6 +9,18 @@ export type ContactInput = {
 };
 
 export class ContactRepository {
+  async findByPhone(kind: ContactKind, phone: string, excludeId?: string) {
+    const result = await query(
+      `SELECT * FROM ${kind}
+       WHERE REGEXP_REPLACE(COALESCE(phone, ''), '[^0-9]+', '', 'g') =
+             REGEXP_REPLACE($1, '[^0-9]+', '', 'g')
+         AND ($2::uuid IS NULL OR id <> $2)
+       LIMIT 1`,
+      [phone, excludeId ?? null]
+    );
+    return result.rows[0] ?? null;
+  }
+
   async list(
     kind: ContactKind,
     input: {
@@ -81,4 +93,3 @@ export class ContactRepository {
 }
 
 export const contactRepository = new ContactRepository();
-

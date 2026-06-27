@@ -28,6 +28,21 @@ const productColumns = `
   p.brand, p.unit, p.purchase_price, p.sale_price, p.stock_quantity,
   p.minimum_stock, p.location, p.image_url, p.description, p.is_active,
   COALESCE((
+    SELECT ib.purchase_price
+    FROM inventory_batches ib
+    WHERE ib.product_id = p.id AND ib.remaining_quantity > 0
+    ORDER BY ib.received_at ASC, ib.created_at ASC, ib.id ASC
+    LIMIT 1
+  ), p.purchase_price) AS next_fifo_cost,
+  (
+    SELECT si.sale_price
+    FROM sale_items si
+    JOIN sales s ON s.id = si.sale_id
+    WHERE si.product_id = p.id AND s.archived_at IS NULL
+    ORDER BY s.sold_at DESC, s.created_at DESC, si.id DESC
+    LIMIT 1
+  ) AS last_sale_price,
+  COALESCE((
     SELECT json_agg(pi.image_url ORDER BY pi.position)
     FROM product_images pi
     WHERE pi.product_id = p.id
