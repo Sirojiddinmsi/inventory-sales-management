@@ -10,6 +10,7 @@ import {
   ShoppingCart,
   Trash2,
   Undo2,
+  UserPlus,
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -178,6 +179,14 @@ export function SalesPage() {
   const [customerId, setCustomerId] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [debouncedCustomerSearch, setDebouncedCustomerSearch] = useState("");
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
+  const [newCustomerNote, setNewCustomerNote] = useState("");
   const [paymentType, setPaymentType] = useState<PaymentType>("CASH");
   const [soldAt, setSoldAt] = useState(toDateTimeLocalInputValue(new Date().toISOString()));
   const [saleDiscount, setSaleDiscount] = useState("0");
@@ -229,10 +238,11 @@ export function SalesPage() {
     queryFn: () => api<MeasurementUnit[]>("/units")
   });
   const customers = useQuery({
-    queryKey: ["customers", "all"],
+    queryKey: ["customers", "sale-select", debouncedCustomerSearch],
     queryFn: () => api<Paginated<Contact>>("/customers", {
-      params: { limit: 100, sortOrder: "asc" }
-    })
+      params: { limit: 100, search: debouncedCustomerSearch, sortOrder: "asc" }
+    }),
+    enabled: modalOpen || customerPickerOpen || newCustomerOpen
   });
 
   useEffect(() => setPage(1), [search, paymentFilter, from, to, archived]);
@@ -252,6 +262,13 @@ export function SalesPage() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [productPickerLineKey, productSearch]);
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () => setDebouncedCustomerSearch(customerSearch.trim()),
+      250
+    );
+    return () => window.clearTimeout(timer);
+  }, [customerSearch]);
 
   const subtotal = useMemo(
     () => lines.reduce(
@@ -317,12 +334,48 @@ export function SalesPage() {
       body: JSON.stringify(salePayload())
     }),
     onSuccess: (sale) => {
-      toast.success(editingId ? "Sotuv nakladnoyi yangilandi" : `Sotuv saqlandi: ${sale.invoice_number}`);
+      toast.success(
+        editingId
+          ? tr("Sotuv nakladnoyi yangilandi", "Накладная продажи обновлена")
+          : tr(`Sotuv saqlandi: ${sale.invoice_number}`, `Продажа сохранена: ${sale.invoice_number}`)
+      );
       setModalOpen(false);
       setEditingId(null);
       refreshSales();
     },
     onError: (error) => toast.error(error.message)
+  });
+
+  const createCustomer = useMutation({
+    mutationFn: () => api<Contact>("/customers", {
+      method: "POST",
+      body: JSON.stringify({
+        name: newCustomerName.trim(),
+        phone: newCustomerPhone.trim() || null,
+        address: newCustomerAddress.trim() || null,
+        note: newCustomerNote.trim() || null
+      })
+    }),
+    onSuccess: (customer) => {
+      setCustomerId(customer.id);
+      setCustomerName(customer.name);
+      setCustomerPhone(customer.phone ?? "");
+      setNewCustomerOpen(false);
+      setNewCustomerName("");
+      setNewCustomerPhone("");
+      setNewCustomerAddress("");
+      setNewCustomerNote("");
+      void queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast.success(tr("Yangi mijoz yaratildi", "Новый клиент создан"));
+    },
+    onError: (error) => {
+      const duplicate = error.message.includes("phone number already exists");
+      toast.error(
+        duplicate
+          ? tr("Bu telefon raqamli mijoz allaqachon mavjud", "Клиент с этим номером телефона уже существует")
+          : error.message
+      );
+    }
   });
 
   const archiveMutation = useMutation({
@@ -417,6 +470,9 @@ export function SalesPage() {
     setSaleDiscount("0");
     setDueDate("");
     setNote("");
+    setCustomerPickerOpen(false);
+    setCustomerSearch("");
+    setNewCustomerOpen(false);
   };
 
   const openCreate = () => {
@@ -504,12 +560,17 @@ export function SalesPage() {
         if (line.key !== key) return line;
         if (field === "productId") {
           const product = productById.get(value);
+          const suggestedPrice = product?.sale_price && product.sale_price > 0
+            ? product.sale_price
+            : product?.last_sale_price && product.last_sale_price > 0
+              ? product.last_sale_price
+              : null;
           return {
             ...line,
             productId: value,
             unit: product?.unit ?? "",
             unitMultiplier: "1",
-            salePrice: product && product.sale_price > 0 ? String(product.sale_price) : ""
+            salePrice: suggestedPrice ? String(suggestedPrice) : ""
           };
         }
         if (field === "unit") {
@@ -546,18 +607,43 @@ export function SalesPage() {
     if (customer) {
       setCustomerName(customer.name);
       setCustomerPhone(customer.phone ?? "");
+      setCustomerPickerOpen(false);
+      setCustomerSearch("");
+    } else {
+      setCustomerName("");
+      setCustomerPhone("");
+      setCustomerPickerOpen(false);
+      setCustomerSearch("");
     }
   };
 
-  const validLines = lines.every(
-    (line) =>
-      line.productId &&
-      Number(line.quantity) > 0 &&
-      line.unit &&
-      Number(line.unitMultiplier) > 0 &&
-      line.salePrice !== ""
-  );
-  const debtCustomerValid = paymentType !== "DEBT" || Boolean(customerId || customerName.trim());
+  const lineValidation = lines.map((line) => {
+    const product = productById.get(line.productId);
+    const quantity = Number(line.quantity);
+    const multiplier = Number(line.unitMultiplier);
+    const gross = quantity * Number(line.salePrice || 0);
+    if (!line.productId) return tr("Mahsulot tanlanmagan", "Товар не выбран");
+    if (!Number.isFinite(quantity) || quantity <= 0) return tr("Miqdor noto‘g‘ri", "Некорректное количество");
+    if (!line.unit || !Number.isFinite(multiplier) || multiplier <= 0) return tr("Birlik noto‘g‘ri", "Некорректная единица");
+    if (line.salePrice === "") return tr("Sotuv narxi kiritilmagan", "Не указана цена продажи");
+    if (Number(line.discount || 0) > gross) return tr("Qator chegirmasi summadan katta", "Скидка строки превышает сумму");
+    if (product && quantity * multiplier > Number(product.stock_quantity)) {
+      return tr("Omborda mahsulot yetarli emas", "Недостаточно товара на складе");
+    }
+    return null;
+  });
+  const saveDisabledReason =
+    lineValidation.find(Boolean)
+    ?? (Number(saleDiscount || 0) > subtotal
+      ? tr("Umumiy chegirma sotuv summasidan katta", "Общая скидка превышает сумму продажи")
+      : null)
+    ?? (!soldAt ? tr("Sotuv sanasi kiritilmagan", "Не указана дата продажи") : null)
+    ?? (paymentType === "DEBT" && !customerId
+      ? tr("Qarz savdosi uchun mijozni tanlang", "Для продажи в долг выберите клиента")
+      : null)
+    ?? (paymentType === "DEBT" && !dueDate
+      ? tr("Qarz muddatini kiriting", "Укажите срок оплаты долга")
+      : null);
   const selectedReturnCount = Object.values(returnQuantities).filter((value) => Number(value) > 0).length;
   const openProductPicker = (line: SaleLine) => {
     setProductPickerLineKey(line.key);
@@ -785,11 +871,15 @@ export function SalesPage() {
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{tr("Bekor qilish", "Отмена")}</Button>
               <Button
                 loading={save.isPending}
-                disabled={!validLines || !debtCustomerValid || !soldAt || total < 0}
+                disabled={Boolean(saveDisabledReason)}
+                title={saveDisabledReason ?? undefined}
                 onClick={() => save.mutate()}
               >
               {editingId ? tr("O‘zgarishlarni saqlash", "Сохранить изменения") : tr("Sotuvni saqlash", "Сохранить продажу")}
             </Button>
+            {saveDisabledReason && (
+              <small className="sale-save-reason">{saveDisabledReason}</small>
+            )}
           </>
         }
       >
@@ -808,8 +898,8 @@ export function SalesPage() {
               <span />
               <span>{tr("Mahsulot", "Товар")}</span>
               <span>{tr("Miqdor / birlik", "Количество / ед.")}</span>
-              <span>{tr("Sotuv narxi", "Цена продажи")}</span>
-              <span>{tr("Chegirma", "Скидка")}</span>
+              <span>{tr("Sotuv narxi, summa", "Цена продажи, сумма")}</span>
+              <span>{tr("Qator chegirmasi, summa", "Скидка строки, сумма")}</span>
               <span>{tr("Jami", "Сумма")}</span>
               <span />
             </div>
@@ -817,8 +907,9 @@ export function SalesPage() {
               {lines.map((line, index) => {
                 const product = productById.get(line.productId);
                 const quantityProps = quantityInputProps(line.unit, product?.unit);
+                const validationError = lineValidation[index];
                 return (
-                  <div className="sale-line" key={line.key}>
+                  <div className={`sale-line ${validationError ? "sale-line-invalid" : ""}`} key={line.key}>
                     <span className="line-number">{index + 1}</span>
                     <div className="sale-line-product">
                       <span className="sale-mobile-label">{tr("Mahsulot", "Товар")}</span>
@@ -864,7 +955,7 @@ export function SalesPage() {
                       </div>
                     </div>
                     <div className="sale-line-price">
-                      <span className="sale-mobile-label">{tr("Sotuv narxi", "Цена продажи")}</span>
+                      <span className="sale-mobile-label">{tr("Sotuv narxi, summa", "Цена продажи, сумма")}</span>
                       <Input
                         type="number"
                         min="0"
@@ -873,7 +964,7 @@ export function SalesPage() {
                       />
                     </div>
                     <div className="sale-line-discount">
-                      <span className="sale-mobile-label">{tr("Chegirma", "Скидка")}</span>
+                      <span className="sale-mobile-label">{tr("Qator chegirmasi, summa", "Скидка строки, сумма")}</span>
                       <Input
                         type="number"
                         min="0"
@@ -919,6 +1010,7 @@ export function SalesPage() {
                         ? `${tr("Qoldiq", "Остаток")}: ${number(product.stock_quantity)} ${product.unit} · ${tr("Sarf", "Расход")}: ${number(Number(line.quantity) * Number(line.unitMultiplier || 0))} ${product.unit}`
                         : "\u00a0"}
                     </small>
+                    {validationError && <small className="sale-line-error">{validationError}</small>}
                   </div>
                 );
               })}
@@ -928,14 +1020,34 @@ export function SalesPage() {
           <div className="sale-section">
             <div className="section-title"><div><strong>{tr("Mijoz va to‘lov", "Клиент и оплата")}</strong></div></div>
             <div className="form-grid">
-              <Select label={tr("Mavjud mijoz", "Существующий клиент")} value={customerId} onChange={(event) => selectCustomer(event.target.value)}>
-                <option value="">{tr("Tanlanmagan", "Не выбран")}</option>
-                {customers.data?.data.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name}{customer.phone ? ` - ${customer.phone}` : ""}
-                  </option>
-                ))}
-              </Select>
+              <div className="customer-select-field">
+                <span className="field-label">{tr("Mavjud mijoz", "Существующий клиент")}</span>
+                <div className="customer-select-actions">
+                  <button
+                    type="button"
+                    className="input customer-select-trigger"
+                    onClick={() => setCustomerPickerOpen(true)}
+                  >
+                    <span>
+                      <strong>{customerName || tr("Tanlanmagan", "Не выбран")}</strong>
+                      {customerPhone && <small>{customerPhone}</small>}
+                    </span>
+                    <Search size={16} />
+                  </button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setNewCustomerOpen(true)}
+                  >
+                    <UserPlus size={16} /> {tr("Yangi mijoz", "Новый клиент")}
+                  </Button>
+                </div>
+                {paymentType === "DEBT" && !customerId && (
+                  <small className="field-error">
+                    {tr("Qarz savdosi uchun mijoz majburiy", "Для продажи в долг клиент обязателен")}
+                  </small>
+                )}
+              </div>
               <Select label={tr("To‘lov turi *", "Вид оплаты *")} value={paymentType} onChange={(event) => setPaymentType(event.target.value as PaymentType)}>
                 <option value="CASH">{tr("Naqd", "Наличные")}</option>
                 <option value="CARD">{tr("Plastik", "Карта")}</option>
@@ -943,7 +1055,7 @@ export function SalesPage() {
               </Select>
               <Input label={tr("Mijoz nomi", "Имя клиента")} value={customerName} onChange={(event) => setCustomerName(event.target.value)} />
               <Input label={tr("Telefon", "Телефон")} value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} />
-              <Input label={tr("Umumiy chegirma", "Общая скидка")} type="number" min="0" value={saleDiscount} onChange={(event) => setSaleDiscount(event.target.value)} />
+              <Input label={tr("Umumiy chegirma, summa", "Общая скидка, сумма")} type="number" min="0" value={saleDiscount} onChange={(event) => setSaleDiscount(event.target.value)} />
               <Input
                 label={tr("Sotuv sanasi *", "Дата продажи *")}
                 type="datetime-local"
@@ -951,11 +1063,136 @@ export function SalesPage() {
                 onChange={(event) => setSoldAt(event.target.value)}
               />
               {paymentType === "DEBT" && (
-                <Input label={tr("Qarz muddati", "Срок долга")} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+                <Input
+                  label={tr("Qarz muddati *", "Срок оплаты *")}
+                  type="date"
+                  value={dueDate}
+                  error={!dueDate ? tr("Muddatni kiriting", "Укажите срок оплаты") : undefined}
+                  onChange={(event) => setDueDate(event.target.value)}
+                />
               )}
               <Textarea className="full" label={tr("Izoh", "Примечание")} value={note} onChange={(event) => setNote(event.target.value)} />
             </div>
           </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={customerPickerOpen}
+        title={tr("Mijozni tanlash", "Выбор клиента")}
+        description={tr(
+          "Mijoz ismi yoki telefon raqami bo‘yicha qidiring.",
+          "Найдите клиента по имени или номеру телефона."
+        )}
+        onClose={() => {
+          setCustomerPickerOpen(false);
+          setCustomerSearch("");
+        }}
+      >
+        <div className="product-picker">
+          <label className="field">
+            <span className="field-label">{tr("Qidiruv", "Поиск")}</span>
+            <div className="product-picker-search">
+              <Search size={17} />
+              <input
+                autoFocus
+                className="input"
+                value={customerSearch}
+                onChange={(event) => setCustomerSearch(event.target.value)}
+                placeholder={tr("Ism yoki telefon", "Имя или телефон")}
+              />
+              {customerSearch && (
+                <button
+                  type="button"
+                  className="icon-button product-picker-clear"
+                  onClick={() => setCustomerSearch("")}
+                  aria-label={tr("Qidiruvni tozalash", "Очистить поиск")}
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+          </label>
+          <div className="product-picker-results customer-picker-results">
+            <button
+              type="button"
+              className={`product-picker-item ${!customerId ? "active" : ""}`}
+              onClick={() => selectCustomer("")}
+            >
+              <span><strong>{tr("Mijoz tanlanmagan", "Клиент не выбран")}</strong></span>
+            </button>
+            {customers.isFetching ? (
+              <div className="product-picker-empty">{tr("Mijozlar qidirilmoqda...", "Поиск клиентов...")}</div>
+            ) : customers.data?.data.length ? (
+              customers.data.data.map((customer) => (
+                <button
+                  key={customer.id}
+                  type="button"
+                  className={`product-picker-item ${customerId === customer.id ? "active" : ""}`}
+                  onClick={() => selectCustomer(customer.id)}
+                >
+                  <span>
+                    <strong>{customer.name}</strong>
+                    <small>{customer.phone || tr("Telefon ko‘rsatilmagan", "Телефон не указан")}</small>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div className="product-picker-empty">{tr("Mijoz topilmadi", "Клиент не найден")}</div>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={newCustomerOpen}
+        title={tr("Yangi mijoz", "Новый клиент")}
+        description={tr(
+          "Mijoz savdoga avtomatik tanlanadi. Kiritilgan sotuv ma’lumotlari saqlanib qoladi.",
+          "Новый клиент будет автоматически выбран. Данные текущей продажи сохранятся."
+        )}
+        onClose={() => setNewCustomerOpen(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setNewCustomerOpen(false)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={createCustomer.isPending}
+              disabled={newCustomerName.trim().length < 2}
+              onClick={() => createCustomer.mutate()}
+            >
+              {tr("Mijozni saqlash", "Сохранить клиента")}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-grid">
+          <Input
+            className="full"
+            label={tr("Mijoz ismi *", "Имя клиента *")}
+            value={newCustomerName}
+            error={newCustomerName.length > 0 && newCustomerName.trim().length < 2
+              ? tr("Kamida 2 ta belgi kiriting", "Введите не менее 2 символов")
+              : undefined}
+            onChange={(event) => setNewCustomerName(event.target.value)}
+          />
+          <Input
+            label={tr("Telefon", "Телефон")}
+            value={newCustomerPhone}
+            onChange={(event) => setNewCustomerPhone(event.target.value)}
+          />
+          <Input
+            label={tr("Manzil", "Адрес")}
+            value={newCustomerAddress}
+            onChange={(event) => setNewCustomerAddress(event.target.value)}
+          />
+          <Textarea
+            className="full"
+            label={tr("Izoh", "Примечание")}
+            value={newCustomerNote}
+            onChange={(event) => setNewCustomerNote(event.target.value)}
+          />
         </div>
       </Modal>
 
@@ -1021,6 +1258,13 @@ export function SalesPage() {
                       <small>
                         {item.code} · {item.category_name} · {item.unit}
                         {item.location ? ` · ${item.location}` : ""}
+                      </small>
+                      <small className="product-price-details">
+                        {tr("FIFO tannarx", "FIFO-себестоимость")}: {money(item.next_fifo_cost ?? item.purchase_price)}
+                        {" · "}
+                        {tr("Tavsiya narxi", "Рекомендуемая цена")}: {item.sale_price > 0 ? money(item.sale_price) : "—"}
+                        {" · "}
+                        {tr("Oxirgi sotuv", "Последняя продажа")}: {item.last_sale_price ? money(item.last_sale_price) : "—"}
                       </small>
                     </span>
                     <em>{number(item.stock_quantity)} {item.unit}</em>

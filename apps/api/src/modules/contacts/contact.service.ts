@@ -12,11 +12,31 @@ export class ContactService {
     return { data: result.rows, meta: paginationMeta(result.total, input.page, input.limit) };
   }
 
-  create(kind: ContactKind, input: Required<Pick<ContactInput, "name">> & ContactInput) {
+  async create(kind: ContactKind, input: Required<Pick<ContactInput, "name">> & ContactInput) {
+    if (kind === "customers" && input.phone?.trim()) {
+      const existing = await contactRepository.findByPhone(kind, input.phone);
+      if (existing) {
+        throw new AppError(
+          409,
+          "A customer with this phone number already exists",
+          "CUSTOMER_PHONE_EXISTS"
+        );
+      }
+    }
     return contactRepository.create(kind, input);
   }
 
   async update(kind: ContactKind, id: string, input: ContactInput) {
+    if (kind === "customers" && input.phone?.trim()) {
+      const existing = await contactRepository.findByPhone(kind, input.phone, id);
+      if (existing) {
+        throw new AppError(
+          409,
+          "A customer with this phone number already exists",
+          "CUSTOMER_PHONE_EXISTS"
+        );
+      }
+    }
     const record = await contactRepository.update(kind, id, input);
     if (!record) throw new AppError(404, "Contact not found", "CONTACT_NOT_FOUND");
     return record;
@@ -29,4 +49,3 @@ export class ContactService {
 }
 
 export const contactService = new ContactService();
-

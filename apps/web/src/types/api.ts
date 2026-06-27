@@ -52,6 +52,8 @@ export type Product = {
   unit: string;
   purchase_price: number;
   sale_price: number;
+  next_fifo_cost?: number;
+  last_sale_price?: number | null;
   stock_quantity: number;
   minimum_stock: number;
   location: string | null;
