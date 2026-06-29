@@ -332,10 +332,11 @@ export function ProductsPage() {
         body: JSON.stringify(payload)
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(editing ? "Mahsulot yangilandi" : "Mahsulot qo‘shildi");
       setModalOpen(false);
-      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.removeQueries({ queryKey: ["products", "sale-select"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => toast.error(error.message)
