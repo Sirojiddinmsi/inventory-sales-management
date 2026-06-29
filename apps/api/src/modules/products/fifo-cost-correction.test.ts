@@ -26,5 +26,16 @@ describe("FIFO remaining stock cost correction", () => {
     expect(fifoCost).toBe(8_000);
     expect(20_000 - fifoCost).toBe(12_000);
   });
-});
 
+  it("uses a 6,000 corrected cost for future sales without touching past allocations", () => {
+    const correction = summarizeCostCorrection(
+      [{ remainingQuantity: 10, unitCost: 5_000 }],
+      6_000
+    );
+    const futureSaleFifoCost = 2 * correction.newUnitCost;
+    expect(correction.oldTotalCost).toBe(50_000);
+    expect(correction.newTotalCost).toBe(60_000);
+    expect(futureSaleFifoCost).toBe(12_000);
+    expect(20_000 - futureSaleFifoCost).toBe(8_000);
+  });
+});

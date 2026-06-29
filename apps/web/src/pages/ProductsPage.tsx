@@ -195,6 +195,8 @@ export function ProductsPage() {
   const [bulkLocation, setBulkLocation] = useState("");
   const [bulkCategoryId, setBulkCategoryId] = useState("");
   const [form, setForm] = useState<ProductForm>(emptyForm);
+  const [updateRemainingCostOnSave, setUpdateRemainingCostOnSave] = useState(false);
+  const [editCostCorrectionNote, setEditCostCorrectionNote] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
@@ -338,7 +340,15 @@ export function ProductsPage() {
         location: form.location || null,
         imageUrl: form.imageUrls[0] || null,
         imageUrls: form.imageUrls,
-        description: form.description || null
+        description: form.description || null,
+        ...(editing
+          ? {
+              updateRemainingFifoCost: updateRemainingCostOnSave,
+              costCorrectionNote: updateRemainingCostOnSave
+                ? editCostCorrectionNote.trim() || null
+                : null
+            }
+          : {})
       };
       return api<Product>(editing ? `/products/${editing.id}` : "/products", {
         method: editing ? "PATCH" : "POST",
@@ -348,6 +358,8 @@ export function ProductsPage() {
     onSuccess: async () => {
       toast.success(editing ? "Mahsulot yangilandi" : "Mahsulot qo‘shildi");
       setModalOpen(false);
+      setUpdateRemainingCostOnSave(false);
+      setEditCostCorrectionNote("");
       await queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.removeQueries({ queryKey: ["products", "sale-select"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -515,6 +527,8 @@ export function ProductsPage() {
 
   const openCreate = () => {
     setEditing(null);
+    setUpdateRemainingCostOnSave(false);
+    setEditCostCorrectionNote("");
     setForm({
       ...emptyForm,
       categoryId: categories.data?.data[0]?.id ?? "",
@@ -525,6 +539,8 @@ export function ProductsPage() {
 
   const openEdit = (product: Product) => {
     setEditing(product);
+    setUpdateRemainingCostOnSave(false);
+    setEditCostCorrectionNote("");
     setForm({
       name: product.name,
       categoryId: product.category_id,
@@ -1019,6 +1035,40 @@ export function ProductsPage() {
           />
           <Input label={tr("Boshlang‘ich qoldiq", "Начальный остаток")} type="number" min="0" step="0.001" value={form.stockQuantity} onChange={(e) => update("stockQuantity", e.target.value)} />
           <Input label={tr("Kirim narxi *", "Закупочная цена *")} type="number" min="0" value={form.purchasePrice} onChange={(e) => update("purchasePrice", e.target.value)} />
+          {editing
+            && editing.stock_quantity > 0
+            && Number(form.purchasePrice) !== Number(editing.purchase_price) && (
+              <div className="full fifo-update-option">
+                <label className="checkbox-filter">
+                  <input
+                    type="checkbox"
+                    checked={updateRemainingCostOnSave}
+                    onChange={(event) => setUpdateRemainingCostOnSave(event.target.checked)}
+                  />
+                  <span>
+                    <strong>
+                      {tr(
+                        "Joriy qoldiq tannarxini yangilash",
+                        "Обновить себестоимость текущих остатков"
+                      )}
+                    </strong>
+                    <small>
+                      {tr(
+                        "Keyingi sotuvlarda foyda yangi tannarx bo‘yicha hisoblanadi. Oldingi sotuvlar o‘zgarmaydi.",
+                        "Будущие продажи будут считать прибыль по новой себестоимости. Уже завершенные продажи не изменятся."
+                      )}
+                    </small>
+                  </span>
+                </label>
+                {updateRemainingCostOnSave && (
+                  <Textarea
+                    label={tr("Tannarx tuzatish izohi", "Примечание к корректировке себестоимости")}
+                    value={editCostCorrectionNote}
+                    onChange={(event) => setEditCostCorrectionNote(event.target.value)}
+                  />
+                )}
+              </div>
+            )}
           <Input label={tr("Tavsiya sotuv narxi", "Рекомендуемая цена")} type="number" min="0" value={form.salePrice} onChange={(e) => update("salePrice", e.target.value)} placeholder={tr("Ixtiyoriy", "Необязательно")} />
           <Input label={tr("Minimal qoldiq", "Минимальный остаток")} type="number" min="0" step="0.001" value={form.minimumStock} onChange={(e) => update("minimumStock", e.target.value)} />
           <div className="full">
