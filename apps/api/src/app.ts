@@ -41,8 +41,14 @@ app.use(
 app.get(
   "/health",
   asyncHandler(async (_req, res) => {
-    await query("SELECT 1");
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    const migrationResult = await query<{ version: string | null }>(
+      "SELECT MAX(version) AS version FROM schema_migrations"
+    );
+    res.json({
+      status: "ok",
+      schemaVersion: migrationResult.rows[0]?.version ?? null,
+      timestamp: new Date().toISOString()
+    });
   })
 );
 
