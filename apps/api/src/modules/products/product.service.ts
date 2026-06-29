@@ -28,6 +28,22 @@ export class ProductService {
     return product;
   }
 
+  async correctRemainingFifoCost(
+    id: string,
+    correctedUnitCost: number,
+    userId: string,
+    note?: string | null
+  ) {
+    const correction = await productRepository.correctRemainingFifoCost(
+      id,
+      correctedUnitCost,
+      userId,
+      note
+    );
+    if (!correction) throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");
+    return correction;
+  }
+
   async delete(id: string) {
     const product = await productRepository.permanentDelete(id);
     if (!product) throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");

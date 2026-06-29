@@ -144,7 +144,13 @@ export type SupplierReturnDocument = {
   items: SupplierReturn[];
 };
 
-export type ProductMovementType = "arrival" | "sale" | "return" | "supplier_return" | "adjustment";
+export type ProductMovementType =
+  | "arrival"
+  | "sale"
+  | "return"
+  | "supplier_return"
+  | "adjustment"
+  | "cost_correction";
 
 export type ProductHistory = {
   product: Product;
@@ -222,6 +228,20 @@ export type ProductHistory = {
     reference_number: string;
     note: string | null;
   }>;
+  cost_corrections: Array<{
+    movement_type: "cost_correction";
+    movement_at: string;
+    quantity: number;
+    purchase_price: number;
+    total_amount: number;
+    old_unit_cost: number;
+    new_unit_cost: number;
+    old_total_cost: number;
+    affected_quantity: number;
+    reference_number: string;
+    partner_name: string;
+    note: string | null;
+  }>;
   movements: Array<{
     movement_type: ProductMovementType;
     movement_at: string;
@@ -234,6 +254,9 @@ export type ProductHistory = {
     partner_name?: string | null;
     location?: string | null;
     remaining_quantity?: number | null;
+    old_unit_cost?: number;
+    new_unit_cost?: number;
+    affected_quantity?: number;
     reference_number: string;
     note?: string | null;
   }>;

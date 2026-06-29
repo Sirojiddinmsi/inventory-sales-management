@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   History,
   ImageOff,
+  RefreshCw,
   MapPin,
   Plus,
   Tags,
@@ -36,7 +37,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
-import { api, download, downloadPost } from "../lib/api";
+import { ApiError, api, download, downloadPost } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
 import type {
   Category,
@@ -91,6 +92,15 @@ type ImportResult = {
   created: number;
   updated: number;
   importedQuantity: number;
+};
+
+type FifoCostCorrectionResult = {
+  id: string;
+  old_unit_cost: number;
+  new_unit_cost: number;
+  affected_quantity: number;
+  old_total_cost: number;
+  new_total_cost: number;
 };
 
 const PRODUCT_PAGE_SIZE_KEY = "products.pageSize";
@@ -199,6 +209,9 @@ export function ProductsPage() {
   const [historyFrom, setHistoryFrom] = useState("");
   const [historyTo, setHistoryTo] = useState("");
   const [historyType, setHistoryType] = useState<ProductMovementType | "">("");
+  const [costCorrectionProduct, setCostCorrectionProduct] = useState<Product | null>(null);
+  const [correctedUnitCost, setCorrectedUnitCost] = useState("");
+  const [costCorrectionNote, setCostCorrectionNote] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const previewTouchStartX = useRef<number | null>(null);
@@ -340,6 +353,45 @@ export function ProductsPage() {
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     onError: (error) => toast.error(error.message)
+  });
+
+  const correctFifoCost = useMutation({
+    mutationFn: () =>
+      api<FifoCostCorrectionResult>(
+        `/products/${costCorrectionProduct!.id}/fifo-cost-correction`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            correctedUnitCost: Number(correctedUnitCost),
+            note: costCorrectionNote.trim() || null
+          })
+        }
+      ),
+    onSuccess: async (result) => {
+      toast.success(
+        tr(
+          `${number(result.affected_quantity)} qoldiq tannarxi yangilandi`,
+          `Себестоимость остатка ${number(result.affected_quantity)} обновлена`
+        )
+      );
+      setCostCorrectionProduct(null);
+      setCorrectedUnitCost("");
+      setCostCorrectionNote("");
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
+      await queryClient.invalidateQueries({ queryKey: ["product-history"] });
+      queryClient.removeQueries({ queryKey: ["products", "sale-select"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiError && error.code === "NO_REMAINING_FIFO_STOCK"
+          ? tr(
+              "Yangilash uchun sotilmagan FIFO qoldiq mavjud emas",
+              "Нет непроданного FIFO-остатка для обновления"
+            )
+          : error.message
+      );
+    }
   });
 
   const remove = useMutation({
@@ -488,6 +540,12 @@ export function ProductsPage() {
       description: product.description ?? ""
     });
     setModalOpen(true);
+  };
+
+  const openCostCorrection = (product: Product) => {
+    setCostCorrectionProduct(product);
+    setCorrectedUnitCost(String(product.purchase_price));
+    setCostCorrectionNote("");
   };
 
   const update = (key: keyof ProductForm, value: string) =>
@@ -818,13 +876,22 @@ export function ProductsPage() {
                         <Edit3 size={16} />
                       </button>
                     {user?.role === "ADMIN" && (
-                      <button
-                        className="icon-button danger-icon"
-                        onClick={() => setDeleting(product)}
-                        title="O‘chirish"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <>
+                        <button
+                          className="icon-button"
+                          onClick={() => openCostCorrection(product)}
+                          title={tr("Joriy qoldiq tannarxini yangilash", "Обновить себестоимость текущих остатков")}
+                        >
+                          <RefreshCw size={16} />
+                        </button>
+                        <button
+                          className="icon-button danger-icon"
+                          onClick={() => setDeleting(product)}
+                          title="O‘chirish"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>
@@ -844,6 +911,73 @@ export function ProductsPage() {
           />
         )}
       </Card>
+
+      <Modal
+        open={Boolean(costCorrectionProduct)}
+        title={tr(
+          "Joriy qoldiq tannarxini yangilash",
+          "Обновить себестоимость текущих остатков"
+        )}
+        description={costCorrectionProduct?.name}
+        onClose={() => setCostCorrectionProduct(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCostCorrectionProduct(null)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={correctFifoCost.isPending}
+              disabled={
+                correctedUnitCost === ""
+                || !Number.isFinite(Number(correctedUnitCost))
+                || Number(correctedUnitCost) < 0
+              }
+              onClick={() => correctFifoCost.mutate()}
+            >
+              <RefreshCw size={16} />
+              {tr("Tannarxni yangilash", "Обновить себестоимость")}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-stack">
+          <div className="warning-box">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>{tr("Faqat sotilmagan qoldiq yangilanadi", "Будет обновлен только непроданный остаток")}</strong>
+              <p>
+                {tr(
+                  "Eski sotuvlar, ularning FIFO tannarxi, foydasi va hisobotlari o‘zgarmaydi. Mahsulotning sotuv narxi ham o‘zgartirilmaydi.",
+                  "Старые продажи, их FIFO-себестоимость, прибыль и отчеты не изменятся. Цена продажи товара также не изменится."
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="correction-summary">
+            <span>{tr("Joriy qoldiq", "Текущий остаток")}</span>
+            <strong>{number(costCorrectionProduct?.stock_quantity ?? 0)} {costCorrectionProduct?.unit}</strong>
+            <span>{tr("Mahsulotning standart kirim narxi", "Закупочная цена товара по умолчанию")}</span>
+            <strong>{money(costCorrectionProduct?.purchase_price ?? 0)}</strong>
+            <span>{tr("Eng eski joriy FIFO tannarxi", "Себестоимость старейшей текущей FIFO-партии")}</span>
+            <strong>{money(costCorrectionProduct?.next_fifo_cost ?? costCorrectionProduct?.purchase_price ?? 0)}</strong>
+          </div>
+          <Input
+            label={tr("Yangi birlik tannarxi *", "Новая себестоимость единицы *")}
+            type="number"
+            min="0"
+            value={correctedUnitCost}
+            error={correctedUnitCost !== "" && Number(correctedUnitCost) < 0
+              ? tr("Tannarx manfiy bo‘lishi mumkin emas", "Себестоимость не может быть отрицательной")
+              : undefined}
+            onChange={(event) => setCorrectedUnitCost(event.target.value)}
+          />
+          <Textarea
+            label={tr("Izoh", "Примечание")}
+            value={costCorrectionNote}
+            onChange={(event) => setCostCorrectionNote(event.target.value)}
+          />
+        </div>
+      </Modal>
 
       <Modal
         open={modalOpen}
@@ -1153,6 +1287,7 @@ export function ProductsPage() {
               <option value="return">{tr("Qaytarish", "Возврат")}</option>
               <option value="supplier_return">{tr("Yetkazib beruvchiga qaytarish", "Возврат поставщику")}</option>
               <option value="adjustment">{tr("Adjustment", "Корректировка")}</option>
+              <option value="cost_correction">{tr("Tannarx tuzatishi", "Корректировка себестоимости")}</option>
             </Select>
           </Card>
 
@@ -1163,6 +1298,12 @@ export function ProductsPage() {
                 <strong>
                   {number(productHistory.data?.summary.current_stock ?? historyProduct?.stock_quantity ?? 0)} {historyProduct?.unit}
                 </strong>
+              </div>
+            </div>
+            <div className="card stat-card">
+              <div className="stat-copy">
+                <span>{tr("Standart kirim narxi", "Закупочная цена по умолчанию")}</span>
+                <strong>{money(productHistory.data?.product.purchase_price ?? historyProduct?.purchase_price ?? 0)}</strong>
               </div>
             </div>
             <div className="card stat-card">
@@ -1197,7 +1338,11 @@ export function ProductsPage() {
                     <td data-label={tr("Turi", "Тип")}>{row.movement_type}</td>
                     <td data-label={tr("Sana", "Дата")}>{dateTime(row.movement_at)}</td>
                     <td data-label={tr("Miqdor", "Количество")}>{number(row.quantity)}</td>
-                    <td data-label={tr("Kirim narxi", "Закупочная цена")}>{row.purchase_price ? money(row.purchase_price) : "-"}</td>
+                    <td data-label={tr("Kirim narxi", "Закупочная цена")}>
+                      {row.movement_type === "cost_correction"
+                        ? `${money(row.old_unit_cost)} → ${money(row.new_unit_cost)}`
+                        : row.purchase_price !== undefined ? money(row.purchase_price) : "-"}
+                    </td>
                     <td data-label={tr("Sotuv narxi", "Цена продажи")}>{row.sale_price ? money(row.sale_price) : "-"}</td>
                     <td data-label={tr("FIFO tannarx", "FIFO себестоимость")}>{row.fifo_cost ? money(row.fifo_cost) : "-"}</td>
                     <td data-label={tr("Foyda", "Прибыль")}>{row.profit !== undefined ? money(row.profit) : "-"}</td>
@@ -1223,7 +1368,7 @@ export function ProductsPage() {
                   <th>{tr("Manba", "Источник")}</th>
                   <th>{tr("Miqdor", "Количество")}</th>
                   <th>{tr("Qolgan", "Осталось")}</th>
-                  <th>{tr("Kirim narxi", "Закупочная цена")}</th>
+                  <th>{tr("FIFO birlik tannarxi", "Себестоимость единицы FIFO")}</th>
                   <th>{tr("Yetkazib beruvchi", "Поставщик")}</th>
                   <th>{tr("Joylashuv", "Место")}</th>
                 </tr>

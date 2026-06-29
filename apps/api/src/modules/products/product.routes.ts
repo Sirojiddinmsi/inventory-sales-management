@@ -10,7 +10,9 @@ import {
   productBulkLocationSchema,
   productCreateSchema,
   productExportSelectedSchema,
+  fifoCostCorrectionSchema,
   productImportSchema,
+  productHistorySchema,
   productListSchema,
   productUpdateSchema
 } from "./product.schema.js";
@@ -44,11 +46,13 @@ productRouter.post(
 productRouter.get(
   "/:id/history/export.xlsx",
   validate(idParamSchema, "params"),
+  validate(productHistorySchema, "query"),
   asyncHandler(productController.historyExcel)
 );
 productRouter.get(
   "/:id/history",
   validate(idParamSchema, "params"),
+  validate(productHistorySchema, "query"),
   asyncHandler(productController.history)
 );
 productRouter.post(
@@ -63,6 +67,13 @@ productRouter.post(
 );
 productRouter.get("/:id", validate(idParamSchema, "params"), asyncHandler(productController.get));
 productRouter.post("/", validate(productCreateSchema), asyncHandler(productController.create));
+productRouter.post(
+  "/:id/fifo-cost-correction",
+  authorize("ADMIN"),
+  validate(idParamSchema, "params"),
+  validate(fifoCostCorrectionSchema),
+  asyncHandler(productController.correctFifoCost)
+);
 productRouter.patch(
   "/:id",
   validate(idParamSchema, "params"),
