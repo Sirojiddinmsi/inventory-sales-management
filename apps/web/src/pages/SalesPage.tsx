@@ -204,6 +204,7 @@ export function SalesPage() {
   const [productSearch, setProductSearch] = useState("");
   const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<Record<string, Product>>({});
+  const [selectingProductId, setSelectingProductId] = useState<string | null>(null);
   const productSearchRef = useRef<HTMLInputElement | null>(null);
 
   const sales = useQuery({
@@ -231,7 +232,8 @@ export function SalesPage() {
       }
     }),
     enabled: modalOpen || Boolean(productPickerLineKey),
-    staleTime: 30_000
+    staleTime: 0,
+    refetchOnMount: "always"
   });
   const units = useQuery({
     queryKey: ["units"],
@@ -481,6 +483,7 @@ export function SalesPage() {
     setProductPickerLineKey(null);
     setProductSearch("");
     setModalOpen(true);
+    void queryClient.invalidateQueries({ queryKey: ["products", "sale-select"] });
   };
 
   const openEdit = async (sale: Sale) => {
@@ -649,14 +652,40 @@ export function SalesPage() {
     setProductPickerLineKey(line.key);
     setProductSearch("");
   };
-  const chooseProduct = (lineKey: string, productId: string) => {
-    const product = productById.get(productId);
-    if (product) {
+  const chooseProduct = async (lineKey: string, productId: string) => {
+    setSelectingProductId(productId);
+    try {
+      // Resolve current persisted data before auto-filling a future sale price.
+      const product = await api<Product>(`/products/${productId}`);
       setSelectedProducts((current) => ({ ...current, [product.id]: product }));
+      setLines((current) =>
+        current.map((line) => {
+          if (line.key !== lineKey) return line;
+          const suggestedPrice = product.sale_price > 0
+            ? product.sale_price
+            : product.last_sale_price && product.last_sale_price > 0
+              ? product.last_sale_price
+              : null;
+          return {
+            ...line,
+            productId: product.id,
+            unit: product.unit,
+            unitMultiplier: "1",
+            salePrice: suggestedPrice ? String(suggestedPrice) : ""
+          };
+        })
+      );
+      setProductPickerLineKey(null);
+      setProductSearch("");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : tr("Mahsulotni yangilab bo‘lmadi", "Не удалось обновить данные товара")
+      );
+    } finally {
+      setSelectingProductId(null);
     }
-    updateLine(lineKey, "productId", productId);
-    setProductPickerLineKey(null);
-    setProductSearch("");
   };
 
   const receipt = async (sale: Sale) => {
@@ -1250,8 +1279,8 @@ export function SalesPage() {
                     key={item.id}
                     type="button"
                     className={`product-picker-item ${isSelected ? "active" : ""}`}
-                    disabled={disabled}
-                    onClick={() => selectedPickerLine && chooseProduct(selectedPickerLine.key, item.id)}
+                    disabled={disabled || selectingProductId !== null}
+                    onClick={() => selectedPickerLine && void chooseProduct(selectedPickerLine.key, item.id)}
                   >
                     <span>
                       <strong>{item.name}</strong>
@@ -1267,7 +1296,11 @@ export function SalesPage() {
                         {tr("Oxirgi sotuv", "Последняя продажа")}: {item.last_sale_price ? money(item.last_sale_price) : "—"}
                       </small>
                     </span>
-                    <em>{number(item.stock_quantity)} {item.unit}</em>
+                    <em>
+                      {selectingProductId === item.id
+                        ? tr("Yangilanmoqda...", "Обновление...")
+                        : `${number(item.stock_quantity)} ${item.unit}`}
+                    </em>
                   </button>
                 );
               })
