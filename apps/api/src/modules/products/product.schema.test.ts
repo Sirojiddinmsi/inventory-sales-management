@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { productCreateSchema, productImportSchema } from "./product.schema.js";
+import {
+  fifoCostCorrectionSchema,
+  productCreateSchema,
+  productImportSchema
+} from "./product.schema.js";
 
 describe("product schemas", () => {
   it("allows a product without a fixed sale price", () => {
@@ -57,5 +61,20 @@ describe("product schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts a non-negative corrected FIFO unit cost", () => {
+    expect(
+      fifoCostCorrectionSchema.safeParse({
+        correctedUnitCost: 4_000,
+        note: "Wrong opening cost correction"
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects a negative corrected FIFO unit cost", () => {
+    expect(
+      fifoCostCorrectionSchema.safeParse({ correctedUnitCost: -1 }).success
+    ).toBe(false);
   });
 });

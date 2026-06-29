@@ -6,6 +6,7 @@ import {
   consumeFifo,
   createInventoryBatch
 } from "../inventory/fifo.repository.js";
+import { summarizeCostCorrection } from "./fifo-cost-correction.js";
 
 type ProductInput = {
   code?: string;
@@ -57,6 +58,110 @@ const productFrom = `
 `;
 
 export class ProductRepository {
+  async correctRemainingFifoCost(
+    id: string,
+    correctedUnitCost: number,
+    userId: string,
+    note?: string | null
+  ) {
+    return withTransaction(async (client) => {
+      const productResult = await client.query(
+        `SELECT id, name, purchase_price, stock_quantity
+         FROM products
+         WHERE id = $1 AND is_active = TRUE
+         FOR UPDATE`,
+        [id]
+      );
+      const product = productResult.rows[0];
+      if (!product) return null;
+
+      const batchesResult = await client.query<{
+        id: string;
+        purchase_id: string | null;
+        remaining_quantity: number;
+        purchase_price: number;
+        received_at: string;
+      }>(
+        `SELECT id, purchase_id, remaining_quantity, purchase_price, received_at
+         FROM inventory_batches
+         WHERE product_id = $1 AND remaining_quantity > 0
+         ORDER BY received_at ASC, created_at ASC, id ASC
+         FOR UPDATE`,
+        [id]
+      );
+      if (batchesResult.rows.length === 0) {
+        throw new AppError(
+          409,
+          "Product has no remaining FIFO stock to correct",
+          "NO_REMAINING_FIFO_STOCK"
+        );
+      }
+
+      const summary = summarizeCostCorrection(
+        batchesResult.rows.map((batch) => ({
+          remainingQuantity: Number(batch.remaining_quantity),
+          unitCost: Number(batch.purchase_price)
+        })),
+        correctedUnitCost
+      );
+      const batchChanges: Array<Record<string, unknown>> = [];
+
+      for (const batch of batchesResult.rows) {
+        const remainingQuantity = Number(batch.remaining_quantity);
+        await client.query(
+          "UPDATE inventory_batches SET remaining_quantity = 0 WHERE id = $1",
+          [batch.id]
+        );
+        const replacement = await client.query<{ id: string }>(
+          `INSERT INTO inventory_batches (
+             product_id, purchase_id, initial_quantity, remaining_quantity,
+             purchase_price, received_at, source, source_reference_id
+           ) VALUES ($1,$2,$3,$3,$4,$5,'COST_CORRECTION',$6)
+           RETURNING id`,
+          [
+            id,
+            null,
+            remainingQuantity,
+            summary.newUnitCost,
+            batch.received_at,
+            batch.id
+          ]
+        );
+        batchChanges.push({
+          originalBatchId: batch.id,
+          replacementBatchId: replacement.rows[0]!.id,
+          quantity: remainingQuantity,
+          oldUnitCost: Number(batch.purchase_price),
+          newUnitCost: summary.newUnitCost
+        });
+      }
+
+      const correctionResult = await client.query(
+        `INSERT INTO fifo_cost_corrections (
+           product_id, old_unit_cost, new_unit_cost, affected_quantity,
+           old_total_cost, new_total_cost, batch_changes, note, corrected_by
+         ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)
+         RETURNING *`,
+        [
+          id,
+          summary.oldUnitCost,
+          summary.newUnitCost,
+          summary.affectedQuantity,
+          summary.oldTotalCost,
+          summary.newTotalCost,
+          JSON.stringify(batchChanges),
+          note?.trim() || null,
+          userId
+        ]
+      );
+      return {
+        ...correctionResult.rows[0],
+        product_name: product.name,
+        default_purchase_price: Number(product.purchase_price)
+      };
+    });
+  }
+
   async list(input: {
     page: number;
     limit: number;
@@ -163,7 +268,7 @@ export class ProductRepository {
     filter: {
       from?: string;
       to?: string;
-      movementType?: "arrival" | "sale" | "return" | "supplier_return" | "adjustment";
+      movementType?: "arrival" | "sale" | "return" | "supplier_return" | "adjustment" | "cost_correction";
     }
   ) {
     const batchValues: unknown[] = [id];
@@ -176,6 +281,8 @@ export class ProductRepository {
     const returnConditions = ["sr.product_id = $1"];
     const supplierReturnValues: unknown[] = [id];
     const supplierReturnConditions = ["spr.product_id = $1", "spr.deleted_at IS NULL"];
+    const correctionValues: unknown[] = [id];
+    const correctionConditions = ["fcc.product_id = $1"];
 
     if (filter.from) {
       batchValues.push(filter.from);
@@ -188,6 +295,8 @@ export class ProductRepository {
       returnConditions.push(`sr.returned_at >= $${returnValues.length}`);
       supplierReturnValues.push(filter.from);
       supplierReturnConditions.push(`spr.returned_at >= $${supplierReturnValues.length}`);
+      correctionValues.push(filter.from);
+      correctionConditions.push(`fcc.corrected_at >= $${correctionValues.length}`);
     }
     if (filter.to) {
       batchValues.push(filter.to);
@@ -200,6 +309,8 @@ export class ProductRepository {
       returnConditions.push(`sr.returned_at <= $${returnValues.length}`);
       supplierReturnValues.push(filter.to);
       supplierReturnConditions.push(`spr.returned_at <= $${supplierReturnValues.length}`);
+      correctionValues.push(filter.to);
+      correctionConditions.push(`fcc.corrected_at <= $${correctionValues.length}`);
     }
 
     const productResult = await query(
@@ -210,7 +321,7 @@ export class ProductRepository {
     const product = productResult.rows[0];
     if (!product) return null;
 
-    const [summaryResult, batchesResult, arrivalsResult, salesResult, returnsResult, supplierReturnsResult, adjustmentsResult] =
+    const [summaryResult, batchesResult, arrivalsResult, salesResult, returnsResult, supplierReturnsResult, adjustmentsResult, correctionsResult] =
       await Promise.all([
         query(
           `SELECT p.stock_quantity AS current_stock,
@@ -285,6 +396,18 @@ export class ProductRepository {
              AND ib.source = 'ADJUSTMENT'
            ORDER BY ib.received_at DESC, ib.created_at DESC`,
           batchValues
+        ),
+        query(
+          `SELECT fcc.id, fcc.corrected_at AS movement_at,
+                  fcc.old_unit_cost, fcc.new_unit_cost,
+                  fcc.affected_quantity, fcc.old_total_cost,
+                  fcc.new_total_cost, fcc.note,
+                  u.name AS corrected_by_name
+           FROM fifo_cost_corrections fcc
+           JOIN users u ON u.id = fcc.corrected_by
+           WHERE ${correctionConditions.join(" AND ")}
+           ORDER BY fcc.corrected_at DESC, fcc.id DESC`,
+          correctionValues
         )
       ]);
 
@@ -346,9 +469,23 @@ export class ProductRepository {
       reference_number: row.id,
       note: "Stock adjustment batch"
     }));
+    const costCorrections = correctionsResult.rows.map((row) => ({
+      movement_type: "cost_correction",
+      movement_at: row.movement_at,
+      quantity: row.affected_quantity,
+      purchase_price: row.new_unit_cost,
+      total_amount: row.new_total_cost,
+      old_unit_cost: row.old_unit_cost,
+      new_unit_cost: row.new_unit_cost,
+      old_total_cost: row.old_total_cost,
+      affected_quantity: row.affected_quantity,
+      reference_number: row.id,
+      partner_name: row.corrected_by_name,
+      note: row.note
+    }));
 
     const requestedType = filter.movementType;
-    const movements = [...arrivals, ...sales, ...returns, ...supplierReturns, ...adjustments]
+    const movements = [...arrivals, ...sales, ...returns, ...supplierReturns, ...adjustments, ...costCorrections]
       .filter((row) => !requestedType || row.movement_type === requestedType)
       .sort((a, b) => new Date(b.movement_at).getTime() - new Date(a.movement_at).getTime());
 
@@ -364,6 +501,7 @@ export class ProductRepository {
       returns,
       supplier_returns: supplierReturns,
       adjustments,
+      cost_corrections: costCorrections,
       movements
     };
   }

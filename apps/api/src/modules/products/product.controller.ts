@@ -36,6 +36,17 @@ export class ProductController {
     res.json(await productService.update(String(req.params.id), req.body));
   }
 
+  async correctFifoCost(req: Request, res: Response) {
+    res.json(
+      await productService.correctRemainingFifoCost(
+        String(req.params.id),
+        req.body.correctedUnitCost,
+        req.user!.id,
+        req.body.note
+      )
+    );
+  }
+
   async delete(req: Request, res: Response) {
     await productService.delete(String(req.params.id));
     res.status(204).send();

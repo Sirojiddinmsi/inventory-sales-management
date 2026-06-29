@@ -14,6 +14,19 @@ export const productListSchema = paginationSchema.extend({
   sortOrder: z.enum(["asc", "desc"]).default("asc")
 });
 
+export const productHistorySchema = z.object({
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+  movementType: z.enum([
+    "arrival",
+    "sale",
+    "return",
+    "supplier_return",
+    "adjustment",
+    "cost_correction"
+  ]).optional()
+});
+
 export const productCreateSchema = z.object({
   code: z.string().trim().max(80).optional(),
   name: z.string().trim().min(2).max(255),
@@ -30,6 +43,11 @@ export const productCreateSchema = z.object({
 });
 
 export const productUpdateSchema = productCreateSchema.partial();
+
+export const fifoCostCorrectionSchema = z.object({
+  correctedUnitCost: z.coerce.number().min(0),
+  note: z.string().trim().max(2000).nullish()
+});
 
 const productIds = z
   .array(z.uuid())
