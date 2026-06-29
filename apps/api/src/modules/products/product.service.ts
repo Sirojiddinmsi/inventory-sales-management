@@ -22,8 +22,24 @@ export class ProductService {
     return productRepository.create(input);
   }
 
-  async update(id: string, input: Parameters<typeof productRepository.update>[1]) {
-    const product = await productRepository.update(id, input);
+  async update(
+    id: string,
+    input: Parameters<typeof productRepository.update>[1] & {
+      updateRemainingFifoCost?: boolean;
+      costCorrectionNote?: string | null;
+    },
+    editedBy: string
+  ) {
+    const {
+      updateRemainingFifoCost = false,
+      costCorrectionNote,
+      ...productInput
+    } = input;
+    const product = await productRepository.update(id, productInput, {
+      updateRemainingFifoCost,
+      costCorrectionNote,
+      editedBy
+    });
     if (!product) throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");
     return product;
   }

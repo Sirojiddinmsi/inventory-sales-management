@@ -33,7 +33,13 @@ export class ProductController {
   }
 
   async update(req: Request, res: Response) {
-    res.json(await productService.update(String(req.params.id), req.body));
+    res.json(
+      await productService.update(
+        String(req.params.id),
+        req.body,
+        req.user!.id
+      )
+    );
   }
 
   async correctFifoCost(req: Request, res: Response) {

@@ -2,6 +2,7 @@ import { query, withTransaction } from "../../config/database.js";
 import { AppError } from "../../shared/errors/AppError.js";
 import type { ProductImportRow } from "./product.schema.js";
 import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 import {
   consumeFifo,
   createInventoryBatch
@@ -64,7 +65,26 @@ export class ProductRepository {
     userId: string,
     note?: string | null
   ) {
-    return withTransaction(async (client) => {
+    return withTransaction((client) =>
+      this.correctRemainingFifoCostWithClient(
+        client,
+        id,
+        correctedUnitCost,
+        userId,
+        note,
+        true
+      )
+    );
+  }
+
+  private async correctRemainingFifoCostWithClient(
+    client: PoolClient,
+    id: string,
+    correctedUnitCost: number,
+    userId: string,
+    note: string | null | undefined,
+    requireRemainingStock: boolean
+  ) {
       const productResult = await client.query(
         `SELECT id, name, purchase_price, stock_quantity
          FROM products
@@ -90,11 +110,14 @@ export class ProductRepository {
         [id]
       );
       if (batchesResult.rows.length === 0) {
-        throw new AppError(
-          409,
-          "Product has no remaining FIFO stock to correct",
-          "NO_REMAINING_FIFO_STOCK"
-        );
+        if (requireRemainingStock) {
+          throw new AppError(
+            409,
+            "Product has no remaining FIFO stock to correct",
+            "NO_REMAINING_FIFO_STOCK"
+          );
+        }
+        return { skipped: true, affected_quantity: 0 };
       }
 
       const summary = summarizeCostCorrection(
@@ -159,7 +182,6 @@ export class ProductRepository {
         product_name: product.name,
         default_purchase_price: Number(product.purchase_price)
       };
-    });
   }
 
   async list(input: {
@@ -557,7 +579,15 @@ export class ProductRepository {
     });
   }
 
-  async update(id: string, input: ProductInput) {
+  async update(
+    id: string,
+    input: ProductInput,
+    correction?: {
+      updateRemainingFifoCost: boolean;
+      costCorrectionNote?: string | null;
+      editedBy: string;
+    }
+  ) {
     const mapping: Omit<Record<keyof ProductInput, string>, "imageUrls"> = {
       code: "code",
       name: "name",
@@ -630,6 +660,16 @@ export class ProductRepository {
         } else if (difference < 0) {
           await consumeFifo(client, id, Math.abs(difference));
         }
+      }
+      if (correction?.updateRemainingFifoCost && input.purchasePrice !== undefined) {
+        await this.correctRemainingFifoCostWithClient(
+          client,
+          id,
+          input.purchasePrice,
+          correction.editedBy,
+          correction.costCorrectionNote,
+          false
+        );
       }
       let savedImages = imageUrls;
       if (savedImages) {

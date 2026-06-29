@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   fifoCostCorrectionSchema,
   productCreateSchema,
-  productImportSchema
+  productImportSchema,
+  productUpdateSchema
 } from "./product.schema.js";
 
 describe("product schemas", () => {
@@ -75,6 +76,24 @@ describe("product schemas", () => {
   it("rejects a negative corrected FIFO unit cost", () => {
     expect(
       fifoCostCorrectionSchema.safeParse({ correctedUnitCost: -1 }).success
+    ).toBe(false);
+  });
+
+  it("allows product update to request an atomic remaining FIFO correction", () => {
+    expect(
+      productUpdateSchema.safeParse({
+        purchasePrice: 6_000,
+        updateRemainingFifoCost: true,
+        costCorrectionNote: "Correct remaining stock"
+      }).success
+    ).toBe(true);
+  });
+
+  it("requires purchase price for an update-time FIFO correction", () => {
+    expect(
+      productUpdateSchema.safeParse({
+        updateRemainingFifoCost: true
+      }).success
     ).toBe(false);
   });
 });

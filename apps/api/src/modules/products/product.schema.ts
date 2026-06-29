@@ -42,7 +42,18 @@ export const productCreateSchema = z.object({
   description: nullableText
 });
 
-export const productUpdateSchema = productCreateSchema.partial();
+export const productUpdateSchema = productCreateSchema.partial().extend({
+  updateRemainingFifoCost: z.boolean().optional().default(false),
+  costCorrectionNote: z.string().trim().max(2000).nullish()
+}).superRefine((input, context) => {
+  if (input.updateRemainingFifoCost && input.purchasePrice === undefined) {
+    context.addIssue({
+      code: "custom",
+      message: "Purchase price is required when updating remaining FIFO cost",
+      path: ["purchasePrice"]
+    });
+  }
+});
 
 export const fifoCostCorrectionSchema = z.object({
   correctedUnitCost: z.coerce.number().min(0),
