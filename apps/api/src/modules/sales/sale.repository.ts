@@ -7,8 +7,13 @@ import {
   releaseActiveAllocations,
   returnFifoToBatches
 } from "../inventory/fifo.repository.js";
+import {
+  availableForSaleEdit,
+  hasEnoughStockForSaleEdit
+} from "./sale-stock-validation.js";
 
 type SaleItemInput = {
+  saleItemId?: string;
   productId: string;
   quantity: number;
   unit: string;
@@ -409,17 +414,75 @@ export class SaleRepository {
          ORDER BY id FOR UPDATE`,
         [productIds]
       );
-      const productMap = new Map(productResult.rows.map((product) => [product.id, product]));
+      const productMap = new Map(
+        productResult.rows.map((product) => [
+          product.id,
+          {
+            ...product,
+            purchase_price: Number(product.purchase_price),
+            stock_quantity: Number(product.stock_quantity)
+          }
+        ])
+      );
       const unitMap = await this.saleUnitMap(client, input.items);
+      const oldItemMap = new Map(
+        oldItemsResult.rows.map((oldItem) => [oldItem.id, oldItem])
+      );
+
+      for (const item of input.items) {
+        const product = productMap.get(item.productId);
+        if (!product) throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");
+        const unit = unitMap.get(item.unit.toLowerCase())!;
+        const unitMultiplier = unit.toLowerCase() === product.unit.toLowerCase()
+          ? 1
+          : item.unitMultiplier;
+        const requestedBaseQuantity = item.quantity * unitMultiplier;
+        const originalItem = item.saleItemId
+          ? oldItemMap.get(item.saleItemId)
+          : undefined;
+        if (item.saleItemId && !originalItem) {
+          throw new AppError(
+            422,
+            "Sale item does not belong to this invoice",
+            "SALE_ITEM_MISMATCH"
+          );
+        }
+        const originalCredit =
+          originalItem?.product_id === item.productId
+            ? Number(originalItem.quantity)
+            : 0;
+        if (!hasEnoughStockForSaleEdit(
+          product.stock_quantity,
+          originalCredit,
+          requestedBaseQuantity
+        )) {
+          const available = availableForSaleEdit(
+            product.stock_quantity,
+            originalCredit
+          );
+          throw new AppError(
+            409,
+            `Insufficient stock for ${product.name}. Available for edit: ${available}`,
+            "INSUFFICIENT_STOCK",
+            {
+              productId: product.id,
+              available,
+              currentStock: product.stock_quantity,
+              originalQuantity: originalCredit,
+              requested: requestedBaseQuantity
+            }
+          );
+        }
+      }
 
       for (const oldItem of oldItemsResult.rows) {
         await releaseActiveAllocations(client, oldItem.id, false);
         await client.query(
           "UPDATE products SET stock_quantity = stock_quantity + $2 WHERE id = $1",
-          [oldItem.product_id, oldItem.quantity]
+          [oldItem.product_id, Number(oldItem.quantity)]
         );
         const product = productMap.get(oldItem.product_id);
-        if (product) product.stock_quantity += oldItem.quantity;
+        if (product) product.stock_quantity += Number(oldItem.quantity);
       }
 
       let subtotal = 0;
@@ -431,7 +494,7 @@ export class SaleRepository {
           ? 1
           : item.unitMultiplier;
         const stockQuantity = item.quantity * unitMultiplier;
-        if (product.stock_quantity < stockQuantity) {
+        if (Number(product.stock_quantity) + 0.0001 < stockQuantity) {
           throw new AppError(
             409,
             `Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`,

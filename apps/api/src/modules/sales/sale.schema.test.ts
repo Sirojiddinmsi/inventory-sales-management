@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { saleCreateSchema } from "./sale.schema.js";
+import { saleCreateSchema, saleUpdateSchema } from "./sale.schema.js";
 
 const item = {
   productId: "ce61865c-0f1b-4f88-b8d2-7320575c1171",
@@ -36,6 +36,19 @@ describe("saleCreateSchema", () => {
       customerName: "Ali",
       items: [item],
       discount: 5_000,
+      paymentType: "CASH"
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an existing sale item id during invoice editing", () => {
+    const result = saleUpdateSchema.safeParse({
+      items: [{
+        ...item,
+        saleItemId: "beaf06e2-0d3d-4e20-8195-72f44fdf8ea8"
+      }],
+      discount: 0,
       paymentType: "CASH"
     });
 
