@@ -14,6 +14,7 @@ export const saleListSchema = paginationSchema.extend({
 });
 
 const saleItemSchema = z.object({
+  saleItemId: z.uuid().optional(),
   productId: z.uuid(),
   quantity: z.coerce.number().positive(),
   unit: z.string().trim().min(1).max(40),

@@ -58,6 +58,9 @@ type SaleLine = {
   unitMultiplier: string;
   salePrice: string;
   discount: string;
+  originalSaleItemId?: string;
+  originalProductId?: string;
+  originalBaseQuantity?: number;
 };
 
 const FRACTIONAL_UNIT_NAMES = new Set([
@@ -316,6 +319,7 @@ export function SalesPage() {
     customerName: customerName || null,
     customerPhone: customerPhone || null,
     items: lines.map((line) => ({
+      saleItemId: editingId ? line.originalSaleItemId : undefined,
       productId: line.productId,
       quantity: Number(line.quantity),
       unit: line.unit,
@@ -527,7 +531,10 @@ export function SalesPage() {
         unit: item.unit,
         unitMultiplier: String(item.unit_multiplier),
         salePrice: String(item.sale_price),
-        discount: String(item.discount)
+        discount: String(item.discount),
+        originalSaleItemId: item.id,
+        originalProductId: item.product_id,
+        originalBaseQuantity: Number(item.quantity)
       })));
       setSelectedProducts(detailProducts);
       setCustomerId(details.customer_id ?? "");
@@ -630,7 +637,12 @@ export function SalesPage() {
     if (!line.unit || !Number.isFinite(multiplier) || multiplier <= 0) return tr("Birlik noto‘g‘ri", "Некорректная единица");
     if (line.salePrice === "") return tr("Sotuv narxi kiritilmagan", "Не указана цена продажи");
     if (Number(line.discount || 0) > gross) return tr("Qator chegirmasi summadan katta", "Скидка строки превышает сумму");
-    if (product && quantity * multiplier > Number(product.stock_quantity)) {
+    const originalCredit =
+      editingId && line.originalProductId === line.productId
+        ? Number(line.originalBaseQuantity ?? 0)
+        : 0;
+    const availableForEdit = Number(product?.stock_quantity ?? 0) + originalCredit;
+    if (product && quantity * multiplier > availableForEdit + 0.0001) {
       return tr("Omborda mahsulot yetarli emas", "Недостаточно товара на складе");
     }
     return null;
@@ -937,6 +949,12 @@ export function SalesPage() {
                 const product = productById.get(line.productId);
                 const quantityProps = quantityInputProps(line.unit, product?.unit);
                 const validationError = lineValidation[index];
+                const originalCredit =
+                  editingId && line.originalProductId === line.productId
+                    ? Number(line.originalBaseQuantity ?? 0)
+                    : 0;
+                const availableForEdit =
+                  Number(product?.stock_quantity ?? 0) + originalCredit;
                 return (
                   <div className={`sale-line ${validationError ? "sale-line-invalid" : ""}`} key={line.key}>
                     <span className="line-number">{index + 1}</span>
@@ -1034,9 +1052,11 @@ export function SalesPage() {
                         <small className="base-unit-note placeholder">{"\u00a0"}</small>
                       )}
                     </div>
-                    <small className="line-total-note">
+                    <small className={`line-total-note ${editingId ? "sale-edit-availability" : ""}`}>
                       {product
-                        ? `${tr("Qoldiq", "Остаток")}: ${number(product.stock_quantity)} ${product.unit} · ${tr("Sarf", "Расход")}: ${number(Number(line.quantity) * Number(line.unitMultiplier || 0))} ${product.unit}`
+                        ? editingId
+                          ? `${tr("Bu tahrir uchun mavjud", "Доступно для этого редактирования")}: ${number(availableForEdit)} ${product.unit} (${tr("joriy qoldiq + ushbu nakladnoydagi miqdor", "текущий остаток + количество в этой накладной")})`
+                          : `${tr("Qoldiq", "Остаток")}: ${number(product.stock_quantity)} ${product.unit} · ${tr("Sarf", "Расход")}: ${number(Number(line.quantity) * Number(line.unitMultiplier || 0))} ${product.unit}`
                         : "\u00a0"}
                     </small>
                     {validationError && <small className="sale-line-error">{validationError}</small>}

@@ -334,6 +334,13 @@ td code { padding: 3px 6px; color: #475569; background: #f1f5f9; border-radius: 
 .line-total-block { grid-area: total; min-width: 0; }
 .line-total { min-height: 39px; display: flex; align-items: center; justify-content: flex-end; font-size: 10px; line-height: 1; white-space: nowrap; }
 .line-total-note { grid-area: totalMeta; align-self: center; color: var(--muted); font-family: "Inter", sans-serif; font-size: 8px; font-weight: 400; text-align: right; white-space: nowrap; }
+.line-total-note.sale-edit-availability {
+  grid-area: auto;
+  grid-column: 2 / -2;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.45;
+}
 .modal-total { margin-right: auto; display: flex; flex-direction: column; }
 .modal-total span { color: var(--muted); font-size: 9px; }
 .modal-total strong { margin-top: 3px; color: #0f172a; font-size: 15px; }
