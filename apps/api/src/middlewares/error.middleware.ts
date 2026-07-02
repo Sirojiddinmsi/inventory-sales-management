@@ -14,6 +14,28 @@ export const errorHandler: ErrorRequestHandler = (error: DatabaseError, req, res
   req.log?.error({ err: error }, "Request failed");
 
   if (error instanceof ZodError) {
+    if (req.originalUrl.includes("/products/import")) {
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      const errors = error.issues.map((issue) => {
+        const rowIndex = typeof issue.path[1] === "number" ? issue.path[1] : -1;
+        const field = typeof issue.path[2] === "string"
+          ? issue.path[2]
+          : String(issue.path.at(-1) ?? "row");
+        return {
+          row: Number(rows[rowIndex]?.rowNumber ?? rowIndex + 2),
+          field,
+          message: issue.message
+        };
+      });
+      res.status(422).json({
+        error: {
+          code: "IMPORT_VALIDATION_FAILED",
+          message: "Excel import contains invalid rows",
+          details: { errors }
+        }
+      });
+      return;
+    }
     res.status(422).json({
       error: {
         code: "VALIDATION_ERROR",

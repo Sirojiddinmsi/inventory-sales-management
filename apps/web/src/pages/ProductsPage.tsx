@@ -39,6 +39,11 @@ import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
 import { ApiError, api, download, downloadPost } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
+import {
+  parseLocalizedNumber,
+  parsePriceCell,
+  parseQuantityCell
+} from "../lib/productImport";
 import type {
   Category,
   MeasurementUnit,
@@ -76,6 +81,7 @@ const emptyForm: ProductForm = {
 
 type ImportRow = {
   rowNumber: number;
+  code: string | null;
   name: string;
   category: string;
   unit: string;
@@ -85,6 +91,16 @@ type ImportRow = {
   minimumStock: number;
   location: string | null;
   description: string | null;
+  errors: ImportRowError[];
+};
+
+type ImportRowError = {
+  field: string;
+  message: string;
+};
+
+type BackendImportRowError = ImportRowError & {
+  row: number;
 };
 
 type ImportResult = {
@@ -135,16 +151,30 @@ function ProductImage({
   return <img {...props} className={className} src={src} alt={alt} onError={() => setFailed(true)} />;
 }
 
-const headerAliases: Record<keyof Omit<ImportRow, "rowNumber">, string[]> = {
-  name: ["nomi", "name", "mahsulot nomi", "product name"],
-  category: ["kategoriya", "category"],
-  unit: ["birlik", "unit"],
-  purchasePrice: ["kirim narxi", "purchase price"],
-  salePrice: ["tavsiya sotuv narxi", "sotuv narxi", "sale price"],
-  quantity: ["miqdor", "qoldiq", "quantity", "stock"],
-  minimumStock: ["minimal qoldiq", "minimum stock"],
+type ImportColumn = Exclude<keyof ImportRow, "rowNumber" | "errors">;
+
+const headerAliases: Record<ImportColumn, string[]> = {
+  code: ["code", "kod", "mahsulot kodi", "product code", "код", "код товара"],
+  name: ["nomi", "name", "mahsulot nomi", "product name", "товар", "название товара"],
+  category: ["kategoriya", "category", "категория"],
+  unit: ["birlik", "unit", "единица", "ед."],
+  purchasePrice: ["kirim narxi", "purchase price", "закупочная цена"],
+  salePrice: ["tavsiya sotuv narxi", "sotuv narxi", "sale price", "рекомендуемая цена"],
+  quantity: ["miqdor", "qoldiq", "quantity", "stock", "количество", "остаток"],
+  minimumStock: ["minimal qoldiq", "minimum stock", "минимальный остаток"],
   location: ["joylashuv", "location", "polka", "yashik", "shelf", "box"],
   description: ["tavsif", "description"]
+};
+
+const categoryAliases: Record<string, string[]> = {
+  lapka: ["lapka", "лапка"],
+  ulitka: ["ulitka", "улитка"],
+  nina: ["nina", "igna", "игла", "игна"],
+  other: ["other", "другое", "boshqa"],
+  plastina: ["plastina", "пластина"],
+  pichoq: ["pichoq", "нож", "ножи"],
+  disk: ["disk", "диск"],
+  overlock: ["overlock parts", "overlock", "оверлок", "детали оверлока"]
 };
 
 function normalizeHeader(value: unknown) {
@@ -156,11 +186,14 @@ function normalizeHeader(value: unknown) {
     .trim();
 }
 
-function numericCell(value: unknown, fallback = 0) {
-  if (value === null || value === undefined || value === "") return fallback;
-  if (typeof value === "number") return value;
-  const parsed = Number(String(value).replace(/\s/g, "").replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : Number.NaN;
+function normalizeImportLookup(value: string) {
+  return value.trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+function importCategoryKey(value: string) {
+  const normalized = normalizeImportLookup(value);
+  return Object.entries(categoryAliases)
+    .find(([, aliases]) => aliases.includes(normalized))?.[0] ?? null;
 }
 
 function readProductPageSize() {
@@ -272,6 +305,10 @@ export function ProductsPage() {
   ).length;
   const allVisibleSelected =
     visibleProductIds.length > 0 && visibleSelectedCount === visibleProductIds.length;
+  const importValidationErrorCount = importRows.reduce(
+    (sum, row) => sum + row.errors.length,
+    0
+  );
 
   useEffect(() => setPage(1), [pageSize, search, categoryId, locationFilter, lowStock]);
   useEffect(() => {
@@ -509,7 +546,12 @@ export function ProductsPage() {
     mutationFn: () =>
       api<ImportResult>("/products/import", {
         method: "POST",
-        body: JSON.stringify({ rows: importRows })
+        body: JSON.stringify({
+          rows: importRows.map(({ errors: _errors, code, ...row }) => ({
+            ...row,
+            code: code || undefined
+          }))
+        })
       }),
     onSuccess: (result) => {
       toast.success(
@@ -522,7 +564,33 @@ export function ProductsPage() {
       void queryClient.invalidateQueries({ queryKey: ["purchases"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (error) => toast.error(error.message)
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === "IMPORT_VALIDATION_FAILED") {
+        const details = error.details as { errors?: BackendImportRowError[] } | undefined;
+        const backendErrors = details?.errors ?? [];
+        setImportRows((current) =>
+          current.map((row) => ({
+            ...row,
+            errors: [
+              ...row.errors,
+              ...backendErrors
+                .filter((item) => item.row === row.rowNumber)
+                .map(({ field, message }) => ({ field, message }))
+            ]
+          }))
+        );
+        setImportError(
+          tr(
+            `${backendErrors.length} ta import xatosi topildi`,
+            `Найдено ошибок импорта: ${backendErrors.length}`
+          )
+        );
+        toast.error(tr("Import qatorlarini tuzating", "Исправьте строки импорта"));
+        return;
+      }
+      setImportError(error.message);
+      toast.error(error.message);
+    }
   });
 
   const openCreate = () => {
@@ -617,6 +685,10 @@ export function ProductsPage() {
     setImportFileName(file.name);
 
     try {
+      const availableCategories =
+        categories.data?.data ?? (await categories.refetch()).data?.data ?? [];
+      const availableUnits =
+        units.data ?? (await units.refetch()).data ?? [];
       const sheet = await readSheet(file);
       if (sheet.length < 2) throw new Error("Excel faylda ma’lumot qatorlari yo‘q");
 
@@ -626,7 +698,7 @@ export function ProductsPage() {
           key,
           headers.findIndex((header) => aliases.includes(header))
         ])
-      ) as Record<keyof Omit<ImportRow, "rowNumber">, number>;
+      ) as Record<ImportColumn, number>;
 
       for (const required of ["name", "category", "purchasePrice", "quantity"] as const) {
         if (columnIndex[required] < 0) {
@@ -635,42 +707,154 @@ export function ProductsPage() {
       }
 
       const parsed = sheet.slice(1).flatMap((row, index) => {
-        const value = (key: keyof Omit<ImportRow, "rowNumber">) =>
+        const value = (key: ImportColumn) =>
           columnIndex[key] >= 0 ? row[columnIndex[key]] : null;
         const name = String(value("name") ?? "").trim();
+        const code = String(value("code") ?? "").trim() || null;
         const category = String(value("category") ?? "").trim();
 
         if (!name && !category) return [];
 
-        const purchasePrice = numericCell(value("purchasePrice"));
-        const salePrice = numericCell(value("salePrice"));
-        const quantity = numericCell(value("quantity"));
-        const minimumStock = numericCell(value("minimumStock"));
+        const purchasePrice = parsePriceCell(value("purchasePrice"), false);
+        const salePrice = parsePriceCell(value("salePrice"), true);
+        const parsedQuantity = parseQuantityCell(value("quantity"));
+        const minimumStock = parseLocalizedNumber(value("minimumStock"));
+        const explicitUnit = String(value("unit") ?? "").trim();
+        const quantityUnit = parsedQuantity.unit;
+        const unit = explicitUnit || quantityUnit || "dona";
+        const errors: ImportRowError[] = [];
 
-        if (!name || !category) {
-          throw new Error(`${index + 2}-qatorda nom yoki kategoriya bo‘sh`);
+        if (!name) errors.push({ field: "name", message: tr("Mahsulot nomi bo‘sh", "Название товара не указано") });
+        if (!category) errors.push({ field: "category", message: tr("Kategoriya bo‘sh", "Категория не указана") });
+        if (Number.isNaN(purchasePrice) || purchasePrice < 0) {
+          errors.push({ field: "purchasePrice", message: tr("Kirim narxi noto‘g‘ri", "Некорректная закупочная цена") });
         }
-        if ([purchasePrice, salePrice, quantity, minimumStock].some(Number.isNaN)) {
-          throw new Error(`${index + 2}-qatorda narx yoki miqdor noto‘g‘ri`);
+        if (purchasePrice > 9_999_999_999_999_999 || salePrice > 9_999_999_999_999_999) {
+          errors.push({ field: "price", message: tr("Narx juda katta", "Цена слишком большая") });
+        }
+        if (Number.isNaN(salePrice) || salePrice < 0) {
+          errors.push({ field: "salePrice", message: tr("Tavsiya narx noto‘g‘ri", "Некорректная рекомендуемая цена") });
+        }
+        if (Number.isNaN(parsedQuantity.quantity) || parsedQuantity.quantity < 0) {
+          errors.push({ field: "quantity", message: tr("Miqdor noto‘g‘ri", "Некорректное количество") });
+        }
+        if (parsedQuantity.quantity > 999_999_999_999_999) {
+          errors.push({ field: "quantity", message: tr("Miqdor juda katta", "Количество слишком большое") });
+        }
+        if (Number.isNaN(minimumStock) || minimumStock < 0) {
+          errors.push({ field: "minimumStock", message: tr("Minimal qoldiq noto‘g‘ri", "Некорректный минимальный остаток") });
+        }
+        if (
+          explicitUnit
+          && quantityUnit
+          && normalizeImportLookup(explicitUnit) !== normalizeImportLookup(quantityUnit)
+        ) {
+          errors.push({
+            field: "unit",
+            message: tr(
+              `Birliklar mos emas: ${explicitUnit} / ${quantityUnit}`,
+              `Единицы не совпадают: ${explicitUnit} / ${quantityUnit}`
+            )
+          });
+        }
+
+        const directCategory = availableCategories.find((item) =>
+          [item.name, item.slug].some((candidate) =>
+            normalizeImportLookup(candidate) === normalizeImportLookup(category)
+          )
+        );
+        const aliasKey = importCategoryKey(category);
+        const aliasCategory = aliasKey
+          ? availableCategories.find((item) =>
+              [item.name, item.slug].some((candidate) =>
+                importCategoryKey(candidate) === aliasKey
+              )
+            )
+          : undefined;
+        const resolvedCategory = directCategory ?? aliasCategory;
+        if (category && !resolvedCategory) {
+          errors.push({
+            field: "category",
+            message: tr(
+              `Kategoriya topilmadi: ${category}`,
+              `Категория не найдена: ${category}`
+            )
+          });
+        }
+
+        const resolvedUnit = availableUnits.find(
+          (item) => normalizeImportLookup(item.name) === normalizeImportLookup(unit)
+        );
+        if (!resolvedUnit) {
+          errors.push({
+            field: "unit",
+            message: tr(
+              `Birlik sozlanmagan: ${unit}`,
+              `Единица не настроена: ${unit}`
+            )
+          });
         }
 
         return [{
           rowNumber: index + 2,
+          code,
           name,
-          category,
-          unit: String(value("unit") ?? "").trim() || "dona",
+          category: resolvedCategory?.name ?? category,
+          unit: resolvedUnit?.name ?? unit,
           purchasePrice,
           salePrice,
-          quantity,
+          quantity: parsedQuantity.quantity,
           minimumStock,
           location: String(value("location") ?? "").trim() || null,
-          description: String(value("description") ?? "").trim() || null
+          description: String(value("description") ?? "").trim() || null,
+          errors
         }];
       });
 
       if (parsed.length === 0) throw new Error("Import qilinadigan mahsulot topilmadi");
       if (parsed.length > 2000) throw new Error("Bir faylda maksimum 2000 ta mahsulot mumkin");
-      setImportRows(parsed);
+      const firstNameRows = new Map<string, number>();
+      const firstCodeRows = new Map<string, number>();
+      const validated = parsed.map((row) => {
+        const nameKey = normalizeImportLookup(row.name);
+        const firstRow = firstNameRows.get(nameKey);
+        if (nameKey && firstRow !== undefined) {
+          return {
+            ...row,
+            errors: [
+              ...row.errors,
+              {
+                field: "name",
+                message: tr(
+                  `Mahsulot nomi takrorlangan (birinchi qator: ${firstRow})`,
+                  `Название товара повторяется (первая строка: ${firstRow})`
+                )
+              }
+            ]
+          };
+        }
+        if (nameKey) firstNameRows.set(nameKey, row.rowNumber);
+        const codeKey = row.code ? normalizeImportLookup(row.code) : "";
+        const firstCodeRow = codeKey ? firstCodeRows.get(codeKey) : undefined;
+        if (codeKey && firstCodeRow !== undefined) {
+          return {
+            ...row,
+            errors: [
+              ...row.errors,
+              {
+                field: "code",
+                message: tr(
+                  `Mahsulot kodi takrorlangan (birinchi qator: ${firstCodeRow})`,
+                  `Код товара повторяется (первая строка: ${firstCodeRow})`
+                )
+              }
+            ]
+          };
+        }
+        if (codeKey) firstCodeRows.set(codeKey, row.rowNumber);
+        return row;
+      });
+      setImportRows(validated);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : "Excel faylni o‘qib bo‘lmadi");
     } finally {
@@ -1130,7 +1314,7 @@ export function ProductsPage() {
             <Button variant="secondary" onClick={() => setImportOpen(false)}>{tr("Bekor qilish", "Отмена")}</Button>
             <Button
               loading={importProducts.isPending}
-              disabled={!importRows.length || parsingExcel}
+              disabled={!importRows.length || parsingExcel || importValidationErrorCount > 0}
               onClick={() => importProducts.mutate()}
             >
               <Upload size={16} /> {importRows.length} {tr("ta mahsulotni import qilish", "товаров импортировать")}
@@ -1161,13 +1345,42 @@ export function ProductsPage() {
 
           <div className="inline-note">
             <FileSpreadsheet size={17} />
-            Kategoriya nomi tizimdagi nom bilan bir xil bo‘lsin: Lapka, Plastina, Nina, Pichoq, Disk, Ulitka, Overlock parts yoki Other.
+            {tr(
+              "Bir xil code mavjud bo‘lsa mahsulot yangilanadi. Bir xil nom, lekin boshqa yoki bo‘sh code bo‘lsa import bloklanadi.",
+              "Если code совпадает, товар обновляется. Одинаковое название с другим или пустым code блокирует импорт."
+            )}
           </div>
 
           {importFileName && (
-            <div className={`excel-file-status ${importError ? "has-error" : ""}`}>
+            <div className={`excel-file-status ${importError || importValidationErrorCount ? "has-error" : ""}`}>
               <strong>{importFileName}</strong>
-              <span>{importError || `${importRows.length} ta qator tayyor`}</span>
+              <span>
+                {importError
+                  || (importValidationErrorCount > 0
+                    ? tr(
+                        `${importRows.length} qator, ${importValidationErrorCount} xato`,
+                        `${importRows.length} строк, ошибок: ${importValidationErrorCount}`
+                      )
+                    : tr(
+                        `${importRows.length} ta qator tayyor`,
+                        `Готово строк: ${importRows.length}`
+                      ))}
+              </span>
+            </div>
+          )}
+
+          {importValidationErrorCount > 0 && (
+            <div className="excel-validation-errors">
+              <strong>{tr("Tuzatilishi kerak bo‘lgan qatorlar", "Строки, которые нужно исправить")}</strong>
+              {importRows.flatMap((row) =>
+                row.errors.map((error, index) => (
+                  <div key={`${row.rowNumber}-${error.field}-${index}`}>
+                    <span>{tr("Qator", "Строка")} {row.rowNumber}</span>
+                    <code>{error.field}</code>
+                    <p>{error.message}</p>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -1186,14 +1399,17 @@ export function ProductsPage() {
               </thead>
               <tbody>
                 {importRows.slice(0, 10).map((row) => (
-                  <tr key={row.rowNumber}>
+                  <tr key={row.rowNumber} className={row.errors.length ? "table-row-error" : ""}>
                     <td data-label={tr("Qator", "Строка")}>{row.rowNumber}</td>
-                    <td data-label={tr("Mahsulot", "Товар")}><strong>{row.name}</strong></td>
+                    <td data-label={tr("Mahsulot", "Товар")}>
+                      <strong>{row.name}</strong>
+                      {row.code ? <small>{row.code}</small> : null}
+                    </td>
                     <td data-label={tr("Kategoriya", "Категория")}>{row.category}</td>
                     <td data-label={tr("Joylashuv", "Место")}>{row.location || "-"}</td>
-                    <td data-label={tr("Kirim narxi", "Закупочная цена")}>{money(row.purchasePrice)}</td>
-                    <td data-label={tr("Tavsiya narx", "Рекомендуемая цена")}>{row.salePrice > 0 ? money(row.salePrice) : "Erkin"}</td>
-                    <td data-label={tr("Miqdor", "Количество")}>{number(row.quantity)} {row.unit}</td>
+                    <td data-label={tr("Kirim narxi", "Закупочная цена")}>{Number.isFinite(row.purchasePrice) ? money(row.purchasePrice) : "-"}</td>
+                    <td data-label={tr("Tavsiya narx", "Рекомендуемая цена")}>{row.salePrice > 0 ? money(row.salePrice) : tr("Erkin", "Свободная цена")}</td>
+                    <td data-label={tr("Miqdor", "Количество")}>{Number.isFinite(row.quantity) ? number(row.quantity) : "-"} {row.unit}</td>
                   </tr>
                 ))}
               </tbody>
