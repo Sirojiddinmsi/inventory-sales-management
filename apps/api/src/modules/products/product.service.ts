@@ -149,6 +149,7 @@ export class ProductService {
     });
     const rows = [
       [
+        header("Code"),
         header("Nomi *"),
         header("Kategoriya *"),
         header("Birlik *"),
@@ -160,6 +161,7 @@ export class ProductService {
         header("Tavsif")
       ],
       [
+        "",
         "Tikuv mashinasi lapkasi",
         "Lapka",
         "dona",
@@ -174,6 +176,7 @@ export class ProductService {
 
     return writeXlsxFile(rows, {
       columns: [
+        { width: 16 },
         { width: 32 },
         { width: 20 },
         { width: 12 },

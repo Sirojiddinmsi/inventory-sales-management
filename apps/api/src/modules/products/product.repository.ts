@@ -8,6 +8,13 @@ import {
   createInventoryBatch
 } from "../inventory/fifo.repository.js";
 import { summarizeCostCorrection } from "./fifo-cost-correction.js";
+import {
+  categoryAliasKey,
+  duplicateImportNameErrors,
+  normalizeImportText,
+  resolveImportCategory,
+  type ImportRowError
+} from "./product-import-validation.js";
 
 type ProductInput = {
   code?: string;
@@ -812,18 +819,21 @@ export class ProductRepository {
 
   async importRows(rows: ProductImportRow[], createdBy: string) {
     return withTransaction(async (client) => {
-      const duplicateCodes = rows
-        .map((row) => row.code?.toLowerCase())
-        .filter((code): code is string => Boolean(code))
-        .filter((code, index, all) => all.indexOf(code) !== index);
-
-      if (duplicateCodes.length > 0) {
-        throw new AppError(
-          422,
-          "Excel faylda bir xil mahsulot kodi takrorlangan",
-          "DUPLICATE_IMPORT_CODES",
-          [...new Set(duplicateCodes)]
-        );
+      const validationErrors: ImportRowError[] = duplicateImportNameErrors(rows);
+      const firstCodeRows = new Map<string, number>();
+      for (const row of rows) {
+        if (!row.code) continue;
+        const code = normalizeImportText(row.code);
+        const firstRow = firstCodeRows.get(code);
+        if (firstRow !== undefined) {
+          validationErrors.push({
+            row: row.rowNumber,
+            field: "code",
+            message: `Product code is duplicated in Excel (first row: ${firstRow})`
+          });
+        } else {
+          firstCodeRows.set(code, row.rowNumber);
+        }
       }
 
       const categoryResult = await client.query<{
@@ -835,63 +845,119 @@ export class ProductRepository {
         "SELECT name FROM measurement_units"
       );
       const categoryMap = new Map<string, string>();
+      const semanticCategoryMap = new Map<string, string>();
       for (const category of categoryResult.rows) {
-        categoryMap.set(category.name.toLowerCase(), category.id);
-        categoryMap.set(category.slug.toLowerCase(), category.id);
+        categoryMap.set(normalizeImportText(category.name), category.id);
+        categoryMap.set(normalizeImportText(category.slug), category.id);
+        const semanticKey =
+          categoryAliasKey(category.name) ?? categoryAliasKey(category.slug);
+        if (semanticKey && !semanticCategoryMap.has(semanticKey)) {
+          semanticCategoryMap.set(semanticKey, category.id);
+        }
       }
 
-      const invalidCategories = rows
-        .filter((row) => !categoryMap.has(row.category.toLowerCase()))
-        .map((row) => ({ rowNumber: row.rowNumber, category: row.category }));
-
-      if (invalidCategories.length > 0) {
-        throw new AppError(
-          422,
-          "Excel faylda mavjud bo‘lmagan kategoriyalar bor",
-          "IMPORT_CATEGORY_NOT_FOUND",
-          invalidCategories
+      const categoryIds = new Map<number, string>();
+      for (const row of rows) {
+        const categoryId = resolveImportCategory(
+          row.category,
+          categoryMap,
+          semanticCategoryMap
         );
+        if (categoryId) {
+          categoryIds.set(row.rowNumber, categoryId);
+        } else {
+          validationErrors.push({
+            row: row.rowNumber,
+            field: "category",
+            message: `Category "${row.category}" was not found`
+          });
+        }
       }
 
       const unitMap = new Map(
-        unitResult.rows.map((unit) => [unit.name.toLowerCase(), unit.name])
+        unitResult.rows.map((unit) => [normalizeImportText(unit.name), unit.name])
       );
-      const invalidUnits = rows
-        .filter((row) => !unitMap.has(row.unit.toLowerCase()))
-        .map((row) => ({ rowNumber: row.rowNumber, unit: row.unit }));
-
-      if (invalidUnits.length > 0) {
-        throw new AppError(
-          422,
-          "Excel faylda tizimda mavjud bo‘lmagan birliklar bor",
-          "IMPORT_UNIT_NOT_FOUND",
-          invalidUnits
-        );
+      const resolvedUnits = new Map<number, string>();
+      for (const row of rows) {
+        const unit = unitMap.get(normalizeImportText(row.unit));
+        if (unit) {
+          resolvedUnits.set(row.rowNumber, unit);
+        } else {
+          validationErrors.push({
+            row: row.rowNumber,
+            field: "unit",
+            message: `Unit "${row.unit}" is not configured`
+          });
+        }
       }
 
       const importCodes = rows
-        .map((row) => row.code?.toLowerCase())
+        .map((row) => row.code ? normalizeImportText(row.code) : undefined)
         .filter((code): code is string => Boolean(code));
-      const existingResult = importCodes.length
-        ? await client.query<{ id: string; code: string }>(
-            `SELECT id, code FROM products
-             WHERE is_active = TRUE AND LOWER(code) = ANY($1::text[])`,
-            [importCodes]
-          )
-        : { rows: [] };
-      const existingProducts = new Map(
-        existingResult.rows.map((row) => [row.code.toLowerCase(), row])
+      const importNames = rows.map((row) => normalizeImportText(row.name));
+      const existingResult = await client.query<{
+        id: string;
+        code: string;
+        name: string;
+      }>(
+        `SELECT id, code, name FROM products
+         WHERE is_active = TRUE
+           AND (
+             LOWER(BTRIM(name)) = ANY($1::text[])
+             OR LOWER(BTRIM(code)) = ANY($2::text[])
+           )`,
+        [importNames, importCodes]
       );
+      const existingProducts = new Map(
+        existingResult.rows.map((row) => [normalizeImportText(row.code), row])
+      );
+      const existingByName = new Map(
+        existingResult.rows.map((row) => [normalizeImportText(row.name), row])
+      );
+
+      for (const row of rows) {
+        const existingName = existingByName.get(normalizeImportText(row.name));
+        const existingCode = row.code
+          ? existingProducts.get(normalizeImportText(row.code))
+          : undefined;
+        if (existingName && existingName.id !== existingCode?.id) {
+          validationErrors.push({
+            row: row.rowNumber,
+            field: "name",
+            message: `Product "${row.name}" already exists`
+          });
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        throw new AppError(
+          422,
+          "Excel import contains invalid rows",
+          "IMPORT_VALIDATION_FAILED",
+          { errors: validationErrors }
+        );
+      }
+
+      let purchaseDocumentId: string | null = null;
+      if (rows.some((row) => row.quantity > 0)) {
+        const documentResult = await client.query<{ id: string }>(
+          `INSERT INTO purchase_documents (purchased_at, created_by)
+           VALUES (NOW(), $1)
+           RETURNING id`,
+          [createdBy]
+        );
+        purchaseDocumentId = documentResult.rows[0]!.id;
+      }
 
       let created = 0;
       let updated = 0;
       let importedQuantity = 0;
 
       for (const row of rows) {
-        const categoryId = categoryMap.get(row.category.toLowerCase())!;
-        const unit = unitMap.get(row.unit.toLowerCase())!;
+        const categoryId = categoryIds.get(row.rowNumber)!;
+        const unit = resolvedUnits.get(row.rowNumber)!;
         const existing = row.code
-          ? existingProducts.get(row.code.toLowerCase())
+          ? existingProducts.get(normalizeImportText(row.code))
           : undefined;
         const code = row.code || this.generateCode();
         let productId: string;
@@ -959,16 +1025,24 @@ export class ProductRepository {
         }
 
         if (row.quantity > 0) {
+          if (!purchaseDocumentId) {
+            throw new AppError(
+              500,
+              "Purchase document was not initialized",
+              "IMPORT_DOCUMENT_MISSING"
+            );
+          }
           const purchaseResult = await client.query<{
             id: string;
             purchased_at: string;
           }>(
             `INSERT INTO purchases (
-               supplier_id, product_id, quantity, purchase_price, total_cost,
+               purchase_document_id, supplier_id, product_id, quantity, purchase_price, total_cost,
                purchased_at, note, created_by
-             ) VALUES (NULL,$1,$2,$3,$4,NOW(),$5,$6)
+             ) VALUES ($1,NULL,$2,$3,$4,$5,NOW(),$6,$7)
              RETURNING id, purchased_at`,
             [
+              purchaseDocumentId,
               productId,
               row.quantity,
               row.purchasePrice,

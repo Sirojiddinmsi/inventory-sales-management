@@ -471,6 +471,27 @@ td code { padding: 3px 6px; color: #475569; background: #f1f5f9; border-radius: 
 .excel-file-status strong { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .excel-file-status.has-error { color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
 .excel-more { padding: 9px; color: #64748b; background: #f8fafc; border-radius: 7px; font-size: 10px; text-align: center; }
+.excel-validation-errors {
+  max-height: 220px;
+  padding: 12px;
+  overflow-y: auto;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fef2f2;
+}
+.excel-validation-errors > strong { display: block; margin-bottom: 8px; font-size: 11px; }
+.excel-validation-errors > div {
+  padding: 7px 0;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  border-top: 1px solid #fee2e2;
+  font-size: 10px;
+}
+.excel-validation-errors code { color: #7f1d1d; background: #fee2e2; }
+.excel-validation-errors p { margin: 0; line-height: 1.45; }
 
 .table-wrap { width: 100%; overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
