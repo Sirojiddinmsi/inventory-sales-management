@@ -10,6 +10,7 @@ import {
   productBulkLocationSchema,
   productCreateSchema,
   productExportSelectedSchema,
+  productInventoryExportSchema,
   fifoCostCorrectionSchema,
   productImportSchema,
   productHistorySchema,
@@ -26,6 +27,11 @@ productRouter.post(
   "/export-selected.xlsx",
   validate(productExportSelectedSchema),
   asyncHandler(productController.exportSelected)
+);
+productRouter.get(
+  "/export-inventory.xlsx",
+  validate(productInventoryExportSchema, "query"),
+  asyncHandler(productController.exportInventory)
 );
 productRouter.post(
   "/bulk-location",

@@ -292,6 +292,69 @@ export class ProductRepository {
     return result.rows;
   }
 
+  async inventoryExport(input: {
+    search?: string;
+    categoryId?: string;
+    location?: string;
+    lowStock?: boolean;
+    sortBy: string;
+    sortOrder: "asc" | "desc";
+  }) {
+    const conditions = ["p.is_active = TRUE"];
+    const values: unknown[] = [];
+
+    if (input.search) {
+      values.push(`%${input.search}%`);
+      conditions.push(`(
+        p.name ILIKE $${values.length}
+        OR p.code ILIKE $${values.length}
+        OR c.name ILIKE $${values.length}
+        OR p.location ILIKE $${values.length}
+      )`);
+    }
+    if (input.categoryId) {
+      values.push(input.categoryId);
+      conditions.push(`p.category_id = $${values.length}`);
+    }
+    if (input.location) {
+      values.push(`%${input.location}%`);
+      conditions.push(`p.location ILIKE $${values.length}`);
+    }
+    if (input.lowStock) conditions.push("p.stock_quantity <= p.minimum_stock");
+
+    const allowedSort: Record<string, string> = {
+      id: "p.id",
+      name: "p.name",
+      code: "p.code",
+      stock_quantity: "p.stock_quantity",
+      sale_price: "p.sale_price",
+      created_at: "p.created_at"
+    };
+    const orderBy = allowedSort[input.sortBy] ?? "p.id";
+    const direction = input.sortOrder === "asc" ? "ASC" : "DESC";
+    const secondaryDirection = input.sortBy === "created_at" ? direction : "ASC";
+
+    const result = await query(
+      `SELECT ${productColumns},
+              COALESCE(batch_values.stock_value, p.stock_quantity * p.purchase_price, 0) AS stock_value,
+              COALESCE(batch_values.remaining_quantity, 0) AS fifo_remaining_quantity
+       ${productFrom}
+       LEFT JOIN (
+         SELECT product_id,
+                SUM(remaining_quantity * purchase_price) AS stock_value,
+                SUM(remaining_quantity) AS remaining_quantity
+         FROM inventory_batches
+         WHERE remaining_quantity > 0
+         GROUP BY product_id
+       ) batch_values ON batch_values.product_id = p.id
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY ${orderBy} ${direction}, p.id ${secondaryDirection}`,
+      values
+    );
+
+    return result.rows;
+  }
+
   async history(
     id: string,
     filter: {
