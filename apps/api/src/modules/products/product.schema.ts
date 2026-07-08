@@ -14,6 +14,18 @@ export const productListSchema = paginationSchema.extend({
   sortOrder: z.enum(["asc", "desc"]).default("asc")
 });
 
+export const productInventoryExportSchema = z.object({
+  search: z.string().trim().optional(),
+  categoryId: z.uuid().optional(),
+  location: z.string().trim().max(120).optional(),
+  lowStock: z.enum(["true", "false"]).transform((value) => value === "true").optional(),
+  sortBy: z
+    .enum(["id", "name", "code", "stock_quantity", "sale_price", "created_at"])
+    .default("id"),
+  sortOrder: z.enum(["asc", "desc"]).default("asc"),
+  locale: z.enum(["uz", "ru", "en"]).default("uz")
+});
+
 export const productHistorySchema = z.object({
   from: z.iso.datetime().optional(),
   to: z.iso.datetime().optional(),

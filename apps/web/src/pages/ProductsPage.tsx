@@ -211,7 +211,7 @@ function readProductPageSize() {
 export function ProductsPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { tr } = useI18n();
+  const { language, tr } = useI18n();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(readProductPageSize);
   const [search, setSearch] = useState("");
@@ -896,6 +896,29 @@ export function ProductsPage() {
       toast.error(error instanceof Error ? error.message : "Export xatosi");
     }
   };
+  const exportInventory = async () => {
+    if (products.data && products.data.meta.total === 0) {
+      toast.error(tr(
+        "Tanlangan filtrlar bo'yicha mahsulot topilmadi",
+        "По выбранным фильтрам товары не найдены"
+      ));
+      return;
+    }
+
+    try {
+      await download("/products/export-inventory.xlsx", "mahsulotlar-qoldiq.xlsx", {
+        search,
+        categoryId,
+        location: locationFilter,
+        lowStock: lowStock || undefined,
+        sortBy: "id",
+        sortOrder: "asc",
+        locale: language
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export xatosi");
+    }
+  };
   const toggleProductSelection = (productId: string, checked: boolean) => {
     setSelectedProductIds((current) =>
       checked
@@ -922,6 +945,9 @@ export function ProductsPage() {
           <>
             <Button variant="secondary" onClick={() => setImportOpen(true)}>
               <FileSpreadsheet size={17} /> {tr("Excel import", "Импорт Excel")}
+            </Button>
+            <Button variant="secondary" onClick={() => void exportInventory()}>
+              <Download size={17} /> {tr("Excelga yuklash", "Экспорт Excel")}
             </Button>
             <Button onClick={openCreate}><Plus size={17} /> {tr("Mahsulot qo‘shish", "Добавить товар")}</Button>
           </>

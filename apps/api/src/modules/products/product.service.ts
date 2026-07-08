@@ -133,6 +133,182 @@ export class ProductService {
     }).toBuffer();
   }
 
+  async exportInventory(
+    input: Parameters<typeof productRepository.inventoryExport>[0] & {
+      locale?: "uz" | "ru" | "en";
+    }
+  ) {
+    const products = await productRepository.inventoryExport(input);
+    if (products.length === 0) {
+      throw new AppError(
+        404,
+        input.locale === "ru"
+          ? "По выбранным фильтрам товары не найдены"
+          : input.locale === "en"
+            ? "No products match the selected filters"
+            : "Tanlangan filtrlar bo'yicha mahsulot topilmadi",
+        "NO_PRODUCTS_TO_EXPORT"
+      );
+    }
+
+    const labels = {
+      uz: {
+        productName: "Mahsulot nomi",
+        category: "Kategoriya",
+        location: "Joylashuv",
+        unit: "Birlik",
+        purchasePrice: "Kirim narxi",
+        salePrice: "Tavsiya sotuv narxi",
+        currentStock: "Joriy qoldiq",
+        minimumStock: "Minimal qoldiq",
+        status: "Status",
+        stockValue: "Ombor qiymati",
+        inStock: "Yetarli",
+        lowStock: "Kam qolgan",
+        outOfStock: "Tugagan",
+        total: "Jami",
+        productsCount: "Mahsulotlar soni"
+      },
+      ru: {
+        productName: "Название товара",
+        category: "Категория",
+        location: "Место",
+        unit: "Ед.",
+        purchasePrice: "Закупочная цена",
+        salePrice: "Рекомендованная цена продажи",
+        currentStock: "Текущий остаток",
+        minimumStock: "Минимальный остаток",
+        status: "Статус",
+        stockValue: "Стоимость остатка",
+        inStock: "В наличии",
+        lowStock: "Мало осталось",
+        outOfStock: "Нет в наличии",
+        total: "Итого",
+        productsCount: "Количество товаров"
+      },
+      en: {
+        productName: "Product name",
+        category: "Category",
+        location: "Location",
+        unit: "Unit",
+        purchasePrice: "Purchase price",
+        salePrice: "Recommended sale price",
+        currentStock: "Current stock",
+        minimumStock: "Minimum stock",
+        status: "Status",
+        stockValue: "Stock value",
+        inStock: "In stock",
+        lowStock: "Low stock",
+        outOfStock: "Out of stock",
+        total: "Total",
+        productsCount: "Products count"
+      }
+    }[input.locale ?? "uz"];
+
+    const header = (value: string) => ({
+      value,
+      fontWeight: "bold" as const,
+      backgroundColor: "#DBEAFE",
+      wrap: true
+    });
+    const currency = (value: unknown) => ({
+      value: Number(value ?? 0),
+      type: Number,
+      format: '#,##0 "UZS"'
+    });
+    const numeric = (value: unknown) => ({
+      value: Number(value ?? 0),
+      type: Number,
+      format: "#,##0.###"
+    });
+    const summary = (value: string | number) => ({
+      value,
+      fontWeight: "bold" as const,
+      backgroundColor: "#F8FAFC"
+    });
+    const summaryNumber = (value: number) => ({
+      ...numeric(value),
+      fontWeight: "bold" as const,
+      backgroundColor: "#F8FAFC"
+    });
+    const summaryCurrency = (value: number) => ({
+      ...currency(value),
+      fontWeight: "bold" as const,
+      backgroundColor: "#F8FAFC"
+    });
+
+    const statusFor = (product: Record<string, unknown>) => {
+      const stock = Number(product.stock_quantity ?? 0);
+      if (stock <= 0) return labels.outOfStock;
+      if (stock <= Number(product.minimum_stock ?? 0)) return labels.lowStock;
+      return labels.inStock;
+    };
+
+    const totalStockQuantity = products.reduce(
+      (sum, product) => sum + Number(product.stock_quantity ?? 0),
+      0
+    );
+    const totalInventoryValue = products.reduce(
+      (sum, product) => sum + Number(product.stock_value ?? 0),
+      0
+    );
+
+    const rows = [
+      [
+        header(labels.productName),
+        header(labels.category),
+        header(labels.location),
+        header(labels.unit),
+        header(labels.purchasePrice),
+        header(labels.salePrice),
+        header(labels.currentStock),
+        header(labels.minimumStock),
+        header(labels.status),
+        header(labels.stockValue)
+      ],
+      ...products.map((product) => [
+        String(product.name),
+        String(product.category_name),
+        String(product.location ?? ""),
+        String(product.unit),
+        currency(product.purchase_price),
+        currency(product.sale_price),
+        numeric(product.stock_quantity),
+        numeric(product.minimum_stock),
+        statusFor(product),
+        currency(product.stock_value)
+      ]),
+      [
+        summary(labels.total),
+        summary(`${labels.productsCount}: ${products.length}`),
+        "",
+        "",
+        "",
+        "",
+        summaryNumber(totalStockQuantity),
+        "",
+        "",
+        summaryCurrency(totalInventoryValue)
+      ]
+    ];
+
+    return writeXlsxFile(rows, {
+      stickyRowsCount: 1,
+      columns: [
+        { width: 36 },
+        { width: 22 },
+        { width: 20 },
+        { width: 12 },
+        { width: 18 },
+        { width: 24 },
+        { width: 16 },
+        { width: 18 },
+        { width: 18 },
+        { width: 20 }
+      ]
+    }).toBuffer();
+  }
+
   importRows(
     rows: Parameters<typeof productRepository.importRows>[0],
     userId: string

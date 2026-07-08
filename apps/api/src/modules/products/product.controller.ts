@@ -81,6 +81,17 @@ export class ProductController {
       .send(buffer);
   }
 
+  async exportInventory(req: Request, res: Response) {
+    const buffer = await productService.exportInventory(req.query as never);
+    res
+      .setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      )
+      .setHeader("Content-Disposition", 'attachment; filename="products-inventory.xlsx"')
+      .send(buffer);
+  }
+
   async importRows(req: Request, res: Response) {
     res.status(201).json(await productService.importRows(req.body.rows, req.user!.id));
   }
