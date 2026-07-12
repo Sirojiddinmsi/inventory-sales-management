@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, CreditCard, HandCoins, Phone, Trash2, Undo2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Archive, ChevronDown, ChevronRight, CreditCard, HandCoins, Phone, Trash2, Undo2, Users } from "lucide-react";
+import { Fragment, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import {
   Badge,
@@ -20,7 +20,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
 import { api } from "../lib/api";
 import { date, dateTime, money } from "../lib/format";
-import type { Debt, DebtPayment, DebtPaymentMethod, DebtStatus, DebtSummary, Paginated } from "../types/api";
+import type { Debt, DebtCustomerGroup, DebtPayment, DebtPaymentMethod, DebtStatus, DebtSummary, Paginated } from "../types/api";
 
 type DebtDetails = Debt & {
   items: Array<{
@@ -50,6 +50,7 @@ const debtStatusText = (status: DebtStatus, tr: (uz: string, ru: string) => stri
         : tr("To‘lanmagan", "Не оплачен");
 
 type DebtFilter = "active" | "paid" | "archive" | "overdue" | "partial" | "all";
+type DebtView = "customers" | "invoices";
 
 export function DebtsPage() {
   const queryClient = useQueryClient();
@@ -57,8 +58,11 @@ export function DebtsPage() {
   const { tr } = useI18n();
   const isAdmin = user?.role === "ADMIN";
   const [page, setPage] = useState(1);
+  const [customerPage, setCustomerPage] = useState(1);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DebtFilter>("active");
+  const [view, setView] = useState<DebtView>("customers");
+  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
   const [selected, setSelected] = useState<Debt | null>(null);
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<DebtPaymentMethod>("CASH");
@@ -82,6 +86,18 @@ export function DebtsPage() {
       }
     })
   });
+  const customerDebts = useQuery({
+    queryKey: ["debts", "customers", customerPage, search, filter],
+    queryFn: () => api<Paginated<DebtCustomerGroup>>("/debts/customers", {
+      params: {
+        page: customerPage,
+        limit: 15,
+        search,
+        filter,
+        archived: filter === "archive"
+      }
+    })
+  });
   const summary = useQuery({
     queryKey: ["debts", "summary"],
     queryFn: () => api<DebtSummary>("/debts/summary")
@@ -92,7 +108,11 @@ export function DebtsPage() {
     enabled: Boolean(selected)
   });
 
-  useEffect(() => setPage(1), [search, filter]);
+  useEffect(() => {
+    setPage(1);
+    setCustomerPage(1);
+    setExpandedCustomer(null);
+  }, [search, filter]);
 
   const refreshDebts = () => {
     void queryClient.invalidateQueries({ queryKey: ["debts"] });
@@ -216,6 +236,22 @@ export function DebtsPage() {
         </Card>
       </div>
       <Card>
+        <div className="debt-view-tabs">
+          <button
+            type="button"
+            className={view === "customers" ? "active" : ""}
+            onClick={() => setView("customers")}
+          >
+            <Users size={16} /> {tr("Mijozlar bo‘yicha", "По клиентам")}
+          </button>
+          <button
+            type="button"
+            className={view === "invoices" ? "active" : ""}
+            onClick={() => setView("invoices")}
+          >
+            <CreditCard size={16} /> {tr("Nakladnoylar bo‘yicha", "По накладным")}
+          </button>
+        </div>
         <div className="filters">
           <SearchInput
             value={search}
@@ -231,6 +267,96 @@ export function DebtsPage() {
             {isAdmin && <option value="archive">{tr("Arxiv", "Архив")}</option>}
           </Select>
         </div>
+        {view === "customers" && (
+          <>
+            <DataTable loading={customerDebts.isLoading} empty={!customerDebts.data?.data.length} minWidth={980}>
+              <thead>
+                <tr>
+                  <th>{tr("Mijoz", "Клиент")}</th>
+                  <th>{tr("Nakladnoylar", "Накладные")}</th>
+                  <th>{tr("Jami qarz", "Общий долг")}</th>
+                  <th>{tr("To‘langan", "Оплачено")}</th>
+                  <th>{tr("Qoldiq", "Остаток")}</th>
+                  <th>{tr("Eng yaqin muddat", "Ближайший срок")}</th>
+                  <th>{tr("Holat", "Статус")}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {customerDebts.data?.data.map((group) => {
+                  const groupKey = `${group.customer_key}:${group.phone_key}`;
+                  const expanded = expandedCustomer === groupKey;
+                  return (
+                    <Fragment key={groupKey}>
+                      <tr className="customer-debt-row">
+                        <td data-label={tr("Mijoz", "Клиент")}>
+                          <div className="product-cell">
+                            <span className="product-avatar"><Users size={17} /></span>
+                            <div>
+                              <strong>{group.customer_name}</strong>
+                              <small>{group.phone || tr("Telefon kiritilmagan", "Телефон не указан")}</small>
+                            </div>
+                          </div>
+                        </td>
+                        <td data-label={tr("Nakladnoylar", "Накладные")}><strong>{group.debt_count}</strong> {tr("ta", "шт.")}</td>
+                        <td data-label={tr("Jami qarz", "Общий долг")}>{money(group.total_amount)}</td>
+                        <td data-label={tr("To‘langan", "Оплачено")} className="positive">{money(group.total_paid_amount)}</td>
+                        <td data-label={tr("Qoldiq", "Остаток")}><strong>{money(group.total_remaining_amount)}</strong></td>
+                        <td data-label={tr("Eng yaqin muddat", "Ближайший срок")}>{date(group.nearest_due_date)}</td>
+                        <td data-label={tr("Holat", "Статус")}>
+                          <Badge tone={debtTone(group.status)}>{debtStatusText(group.status, tr)}</Badge>
+                        </td>
+                        <td data-label={tr("Amallar", "Действия")}>
+                          <Button variant="secondary" size="sm" onClick={() => setExpandedCustomer(expanded ? null : groupKey)}>
+                            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            {expanded ? tr("Yopish", "Скрыть") : tr("Nakladnoylar", "Накладные")}
+                          </Button>
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr className="customer-debt-details-row">
+                          <td colSpan={8}>
+                            <div className="customer-debt-details">
+                              {group.debts.map((debt) => (
+                                <div key={debt.id} className="customer-debt-invoice">
+                                  <div>
+                                    <code>{debt.invoice_number}</code>
+                                    <small>{date(debt.created_at)} · {date(debt.due_date)}</small>
+                                  </div>
+                                  <span>{money(debt.amount)}</span>
+                                  <span className="positive">{money(debt.paid_amount)}</span>
+                                  <strong>{money(debt.remaining_amount)}</strong>
+                                  <Badge tone={debtTone(debt.status)}>{debtStatusText(debt.status, tr)}</Badge>
+                                  <Button variant="secondary" size="sm" onClick={() => openDebt(debt)}>
+                                    {Number(debt.remaining_amount) > 0 ? (
+                                      <><HandCoins size={14} /> {tr("To‘lov", "Оплата")}</>
+                                    ) : (
+                                      tr("Batafsil", "Подробнее")
+                                    )}
+                                  </Button>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </DataTable>
+            {customerDebts.data && (
+              <Pagination
+                page={customerDebts.data.meta.page}
+                totalPages={customerDebts.data.meta.totalPages}
+                total={customerDebts.data.meta.total}
+                onPage={setCustomerPage}
+              />
+            )}
+          </>
+        )}
+        {view === "invoices" && (
+          <>
         <DataTable loading={debts.isLoading} empty={!debts.data?.data.length} minWidth={isArchiveView ? 1080 : 950}>
           <thead>
             <tr>
@@ -322,6 +448,8 @@ export function DebtsPage() {
             total={debts.data.meta.total}
             onPage={setPage}
           />
+        )}
+          </>
         )}
       </Card>
 

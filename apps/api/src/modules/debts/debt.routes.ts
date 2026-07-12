@@ -10,6 +10,7 @@ export const debtRouter = Router();
 
 debtRouter.get("/", validate(debtListSchema, "query"), asyncHandler(debtController.list));
 debtRouter.get("/summary", asyncHandler(debtController.summary));
+debtRouter.get("/customers", validate(debtListSchema, "query"), asyncHandler(debtController.customers));
 debtRouter.get("/:id", validate(idParamSchema, "params"), asyncHandler(debtController.get));
 debtRouter.post(
   "/:id/payments",

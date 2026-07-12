@@ -350,6 +350,22 @@ export type Debt = {
   archive_expires_at: string | null;
 };
 
+export type DebtCustomerGroup = {
+  customer_key: string;
+  phone_key: string;
+  customer_name: string;
+  phone: string | null;
+  debt_count: number;
+  total_amount: number;
+  total_paid_amount: number;
+  total_remaining_amount: number;
+  nearest_due_date: string | null;
+  latest_created_at: string;
+  has_overdue: boolean;
+  status: DebtStatus;
+  debts: Debt[];
+};
+
 export type DebtPayment = {
   id: string;
   amount: number;
