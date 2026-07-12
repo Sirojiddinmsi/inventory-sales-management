@@ -177,6 +177,19 @@ h1, h2, h3, strong { font-family: "Manrope", "Segoe UI", system-ui, sans-serif; 
 .purchase-view-tabs button { min-height: 42px; padding: 0 15px; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .purchase-view-tabs button:hover { border-color: #93c5fd; color: #1d4ed8; }
 .purchase-view-tabs button.active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.debt-view-tabs { display: flex; gap: 8px; padding: 14px 18px 0; overflow-x: auto; }
+.debt-view-tabs button { min-height: 42px; padding: 0 15px; display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.debt-view-tabs button:hover { border-color: #93c5fd; color: #1d4ed8; }
+.debt-view-tabs button.active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+.customer-debt-row { background: #fff; }
+.customer-debt-details-row td { padding: 0 !important; background: #f8fafc; }
+.customer-debt-details { padding: 12px; display: grid; gap: 8px; }
+.customer-debt-invoice { min-height: 52px; padding: 10px 12px; display: grid; grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(110px, auto)) auto auto; align-items: center; gap: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.customer-debt-invoice div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.customer-debt-invoice code { color: #1e293b; font-weight: 800; }
+.customer-debt-invoice small { color: var(--muted); font-size: 10px; }
+.customer-debt-invoice span,
+.customer-debt-invoice strong { white-space: nowrap; font-size: 12px; }
 .purchase-document-row.expanded td { background: #f8fbff; }
 .purchase-document-number { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .purchase-document-detail-cell { padding: 0 !important; background: #f8fafc; }
@@ -954,6 +967,8 @@ td strong { color: #1e293b; font-size: 12px; }
   .filters { padding: 14px; align-items: stretch; }
   .purchase-view-tabs { margin-top: -10px; padding-bottom: 2px; }
   .purchase-view-tabs button { min-height: 44px; }
+  .debt-view-tabs { padding: 12px 12px 0; }
+  .debt-view-tabs button { min-height: 44px; }
   .purchase-document-detail-row { padding: 0 !important; border: 0 !important; background: transparent !important; }
   .table-wrap td.purchase-document-detail-cell { width: 100%; padding: 0 !important; display: block; border: 0; text-align: left; }
   .table-wrap td.purchase-document-detail-cell::before { display: none; }
@@ -967,6 +982,15 @@ td strong { color: #1e293b; font-size: 12px; }
   .purchase-document-item > div:first-child small { max-width: 58%; white-space: normal; text-align: right; }
   .purchase-document-item .row-actions { min-height: 44px; border-bottom: 0; }
   .purchase-document-item .row-actions::before { margin-right: auto; }
+  .customer-debt-invoice {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 7px;
+  }
+  .customer-debt-invoice .button {
+    width: 100%;
+    min-height: 44px;
+  }
   .filters > * { width: 100% !important; }
   .filters .search-input { width: 100%; }
   .input, .button, .icon-button, .sale-product-trigger, .checkbox-filter { min-height: 44px; font-size: 16px; }

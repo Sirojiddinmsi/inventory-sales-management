@@ -8,6 +8,11 @@ export class DebtService {
     return { data: result.rows, meta: paginationMeta(result.total, input.page, input.limit) };
   }
 
+  async customers(input: Parameters<typeof debtRepository.customers>[0]) {
+    const result = await debtRepository.customers(input);
+    return { data: result.rows, meta: paginationMeta(result.total, input.page, input.limit) };
+  }
+
   async get(id: string) {
     const debt = await debtRepository.get(id);
     if (!debt) throw new AppError(404, "Debt not found", "DEBT_NOT_FOUND");

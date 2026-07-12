@@ -6,6 +6,10 @@ export class DebtController {
     res.json(await debtService.list(req.query as never));
   }
 
+  async customers(req: Request, res: Response) {
+    res.json(await debtService.customers(req.query as never));
+  }
+
   async get(req: Request, res: Response) {
     res.json(await debtService.get(String(req.params.id)));
   }
