@@ -116,14 +116,8 @@ Open the admin panel:
 http://localhost:5173
 ```
 
-The initial Docker database seed creates:
-
-```text
-Email: admin@example.com
-Password: Admin123!
-```
-
-Change this development password immediately in a real environment. Docker init scripts only run when the PostgreSQL volume is created for the first time.
+The shared database seed creates reference data such as categories only. It does not create a default administrator account.
+Create the first administrator through the setup registration flow when the database has no users.
 
 ## Render deploy
 
@@ -167,20 +161,7 @@ If Render assigns a different API hostname, update `VITE_API_URL` in the `tikuv-
 
 ### First login on Render
 
-After the database is created, open the API shell or connect with psql and run the seed file:
-
-```powershell
-psql "<RENDER_EXTERNAL_DATABASE_URL>" -f database/seeds/001_default_data.sql
-```
-
-Or run the SQL manually to create the first admin. By default the seed creates:
-
-```text
-Email: admin@example.com
-Password: Admin123!
-```
-
-Change this password immediately after login.
+The shared seed does not create a default administrator. After the database is created and migrations finish, open the web app and use the first-time setup registration page to create the first administrator. After the first user exists, public registration is disabled by the API.
 
 ## Local setup
 
@@ -209,12 +190,14 @@ To stop all local services, double-click:
 STOP-SITE.cmd
 ```
 
-Default development credentials:
+Local-only test credentials created by `START-SITE.cmd`:
 
 ```text
-Email: admin@example.com
-Password: Admin123!
+ADMIN:  local.admin@tikuv.test / LocalAdmin123!
+SELLER: local.seller@tikuv.test / LocalSeller123!
 ```
+
+These accounts are created only by the local startup script and are not part of the shared production seed.
 
 ### Manual setup
 

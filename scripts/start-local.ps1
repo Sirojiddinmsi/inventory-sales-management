@@ -183,6 +183,37 @@ foreach ($migrationFile in $migrationFiles) {
   }
 }
 
+
+$localUsersSql = @"
+INSERT INTO users (name, email, password_hash, role, is_active)
+VALUES
+  ('Local Admin', 'local.admin@tikuv.test', crypt('LocalAdmin123!', gen_salt('bf', 12)), 'ADMIN', TRUE),
+  ('Local Seller', 'local.seller@tikuv.test', crypt('LocalSeller123!', gen_salt('bf', 12)), 'SELLER', TRUE)
+ON CONFLICT (email) DO UPDATE
+SET password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    is_active = TRUE,
+    updated_at = NOW();
+
+UPDATE users
+SET is_active = FALSE,
+    password_hash = crypt(gen_random_uuid()::text, gen_salt('bf', 12)),
+    updated_at = NOW()
+WHERE email = 'admin@example.com';
+"@
+
+& (Join-Path $postgresBin "psql.exe") `
+  -v ON_ERROR_STOP=1 `
+  -h 127.0.0.1 `
+  -p 5432 `
+  -U inventory `
+  -d inventory_sales `
+  -c $localUsersSql `
+  *> $null
+
+if ($LASTEXITCODE -ne 0) {
+  throw "Lokal test foydalanuvchilari yaratilmadi."
+}
 Push-Location $root
 try {
   & npm.cmd run build
@@ -247,10 +278,11 @@ try {
   }
 
   Write-Host ""
-  Write-Host "Inventory & Sales ishga tushdi." -ForegroundColor Green
+  Write-Host "Tikuv Market lokal ishga tushdi." -ForegroundColor Green
   Write-Host "Sayt:  http://127.0.0.1:5173"
   Write-Host "API:   http://127.0.0.1:4000"
-  Write-Host "Login: admin@example.com / Admin123!"
+  Write-Host "ADMIN:  local.admin@tikuv.test / LocalAdmin123!"
+  Write-Host "SELLER: local.seller@tikuv.test / LocalSeller123!"
 
   Start-Process "http://127.0.0.1:5173"
 } finally {

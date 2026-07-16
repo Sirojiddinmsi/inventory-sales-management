@@ -15,6 +15,13 @@ import type {
 type PublicUser = Omit<UserRecord, "password_hash">;
 
 export class AuthService {
+  async setupStatus() {
+    const userCount = await authRepository.countUsers();
+    return {
+      hasUsers: userCount > 0,
+      registrationOpen: userCount === 0
+    };
+  }
   async login(input: LoginInput) {
     const user = await authRepository.findByEmail(input.email);
 
