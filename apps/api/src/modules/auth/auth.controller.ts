@@ -2,6 +2,9 @@ import type { Request, Response } from "express";
 import { authService } from "./auth.service.js";
 
 export class AuthController {
+  async setupStatus(_req: Request, res: Response) {
+    res.json(await authService.setupStatus());
+  }
   async login(req: Request, res: Response) {
     res.json(await authService.login(req.body));
   }

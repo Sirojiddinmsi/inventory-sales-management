@@ -1,7 +1,9 @@
 -- Migration 013 intentionally created one document per legacy purchase item.
 -- Regroup only those legacy 1:1 documents when the original rows share an
 -- exact operation key. Purchase rows and FIFO batches remain unchanged.
-CREATE TEMP TABLE legacy_purchase_document_mapping ON COMMIT DROP AS
+DROP TABLE IF EXISTS legacy_purchase_document_mapping;
+
+CREATE TEMP TABLE legacy_purchase_document_mapping AS
 WITH legacy_items AS (
   SELECT
     pu.id AS purchase_id,
@@ -59,3 +61,5 @@ WHERE NOT EXISTS (
   FROM purchases pu
   WHERE pu.purchase_document_id = pd.id
 );
+
+DROP TABLE IF EXISTS legacy_purchase_document_mapping;

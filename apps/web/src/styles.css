@@ -829,8 +829,6 @@ td strong { color: #1e293b; font-size: 12px; }
 .input-with-icon input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; color: #1e293b; background: transparent; font-size: 12px; }
 .input-with-icon button { width: 30px; height: 30px; display: grid; place-items: center; border: 0; color: #94a3b8; background: transparent; }
 .login-submit { width: 100%; min-height: 45px; margin-top: 5px; }
-.login-demo { margin-top: 18px; color: #94a3b8; font-size: 10px; text-align: center; }
-.login-demo code { color: #475569; }
 .auth-switch { margin-top: 20px; color: #64748b; font-size: 11px; text-align: center; }
 .auth-switch a { color: var(--primary); font-weight: 700; }
 .auth-switch a:hover { text-decoration: underline; }
@@ -1204,4 +1202,59 @@ td strong { color: #1e293b; font-size: 12px; }
   .sale-modal-footer .button {
     flex-basis: 100%;
   }
+}
+
+.setup-state-card,
+.forbidden-card {
+  width: min(100%, 440px);
+  border: 1px solid #dbe4f0;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.10);
+  padding: 28px;
+  color: #0f172a;
+}
+
+.setup-state-card h2,
+.forbidden-card h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.setup-state-card p,
+.forbidden-card p {
+  margin: 0 0 20px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.button-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #2563eb;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0 18px;
+  text-decoration: none;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
+.button-link:hover { background: #1d4ed8; }
+
+.forbidden-page {
+  min-height: min(520px, calc(100dvh - 160px));
+  display: grid;
+  place-items: center;
+  padding: 28px;
+}
+
+.forbidden-card { text-align: center; }
+.forbidden-card svg { color: #f59e0b; }
+.forbidden-card h1 {
+  margin: 10px 0 0;
+  font-size: 44px;
+  color: #1e293b;
 }

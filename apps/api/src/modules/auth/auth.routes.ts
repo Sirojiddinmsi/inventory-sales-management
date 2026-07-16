@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { authenticate, authorize } from "../../middlewares/auth.middleware.js";
 import { asyncHandler } from "../../shared/async-handler.js";
 import { validate } from "../../shared/validation.js";
@@ -15,7 +16,21 @@ import {
 
 export const authRouter = Router();
 
-authRouter.post("/login", validate(loginSchema), asyncHandler(authController.login));
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: {
+    error: {
+      code: "LOGIN_RATE_LIMITED",
+      message: "Too many login attempts. Please wait and try again."
+    }
+  }
+});
+
+authRouter.get("/setup-status", asyncHandler(authController.setupStatus));
+authRouter.post("/login", loginLimiter, validate(loginSchema), asyncHandler(authController.login));
 authRouter.post("/register", validate(registerSchema), asyncHandler(authController.register));
 authRouter.get("/me", authenticate, asyncHandler(authController.me));
 authRouter.patch("/profile", authenticate, validate(updateProfileSchema), asyncHandler(authController.updateProfile));

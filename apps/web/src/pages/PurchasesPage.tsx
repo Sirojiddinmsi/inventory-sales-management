@@ -228,7 +228,7 @@ export function PurchasesPage() {
   const suppliers = useQuery({
     queryKey: ["suppliers", "all"],
     queryFn: () => api<Paginated<Contact>>("/suppliers", {
-      params: { limit: 200, sortOrder: "asc" }
+      params: { limit: 100, sortOrder: "asc" }
     })
   });
 
