@@ -424,6 +424,27 @@ td code { padding: 3px 6px; color: #475569; background: #f1f5f9; border-radius: 
 .return-item small { margin-top: 4px; color: var(--muted); font-size: 10px; }
 .report-filters { margin-bottom: 16px; padding: 15px; display: flex; gap: 12px; align-items: end; }
 .report-filters .field { min-width: 180px; }
+.report-cash-card { margin-bottom: 18px; }
+.report-cash-description { margin: 0; padding: 14px 20px 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.report-cash-summary { padding: 14px 20px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.report-cash-summary > div { min-width: 0; padding: 13px 14px; display: flex; flex-direction: column; gap: 8px; border: 1px solid #e8eef6; border-radius: 10px; background: #f8fafc; }
+.report-cash-summary span { min-height: 32px; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.report-cash-summary span svg { flex: 0 0 auto; }
+.report-cash-summary strong { color: #172033; font-size: 16px; }
+.report-cash-summary .report-cash-total { border-color: #bfdbfe; background: #eff6ff; }
+.report-cash-summary .report-cash-total span,
+.report-cash-summary .report-cash-total strong { color: #1d4ed8; }
+.report-cash-summary .report-cash-credit { border-color: #fde68a; background: #fffbeb; }
+.report-cash-summary .report-cash-credit span,
+.report-cash-summary .report-cash-credit strong { color: #b45309; }
+.report-cash-methods { margin: 0 20px 20px; border: 1px solid #e8eef6; border-radius: 10px; overflow: hidden; }
+.report-cash-method { min-height: 58px; padding: 10px 14px; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 11px; border-bottom: 1px solid #edf2f7; }
+.report-cash-method:last-child { border-bottom: 0; }
+.report-cash-method > i { width: 8px; height: 8px; border-radius: 50%; }
+.report-cash-method > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.report-cash-method strong { font-size: 12px; }
+.report-cash-method small { color: var(--muted); font-size: 10px; line-height: 1.45; }
+.report-cash-method b { color: #172033; font-size: 12px; text-align: right; white-space: nowrap; }
 .report-period-actions { display: flex; gap: 8px; margin-left: auto; }
 .report-stats { margin-top: 0; }
 .report-chart { padding-bottom: 8px; }
@@ -876,6 +897,7 @@ td strong { color: #1e293b; font-size: 12px; }
 
 @media (max-width: 1180px) {
   .stats-grid { grid-template-columns: 1fr 1fr; }
+  .report-cash-summary { grid-template-columns: 1fr 1fr; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; }
 }
@@ -941,6 +963,12 @@ td strong { color: #1e293b; font-size: 12px; }
   .page-actions { width: 100%; }
   .page-actions .button { flex: 1 1 100%; min-height: 44px; }
   .stats-grid { grid-template-columns: 1fr; gap: 11px; }
+  .report-cash-description { padding: 13px 14px 0; }
+  .report-cash-summary { padding: 12px 14px; grid-template-columns: 1fr; }
+  .report-cash-summary > div { padding: 12px; }
+  .report-cash-methods { margin: 0 14px 14px; }
+  .report-cash-method { grid-template-columns: 8px minmax(0, 1fr); }
+  .report-cash-method b { grid-column: 2 / 3; text-align: left; }
   .dashboard-hero {
     min-height: 320px;
     padding: 28px 24px;

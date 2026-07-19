@@ -3,7 +3,9 @@ import {
   Banknote,
   CalendarDays,
   Calculator,
+  CreditCard,
   Download,
+  HandCoins,
   Printer,
   ReceiptText,
   TrendingDown,
@@ -25,11 +27,20 @@ import {
   XAxis,
   YAxis
 } from "recharts";
-import { Button, Card, DataTable, Input, PageHeader, Select, StatCard } from "../components/ui";
+import { Badge, Button, Card, DataTable, Input, PageHeader, Select, StatCard } from "../components/ui";
 import { useI18n } from "../contexts/I18nContext";
 import { api, download } from "../lib/api";
+import { calculateCashReport } from "../lib/cash-report";
 import { date, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
-import type { ReportData } from "../types/api";
+import type { FinancePaymentMethod, ReportData } from "../types/api";
+
+const cashMethodColors: Record<FinancePaymentMethod, string> = {
+  CASH: "#2563eb",
+  CARD: "#8b5cf6",
+  DEBT: "#f59e0b",
+  TRANSFER: "#0f766e",
+  MIXED: "#64748b"
+};
 
 export function ReportsPage() {
   const { tr } = useI18n();
@@ -54,6 +65,33 @@ export function ReportsPage() {
     }
   });
   const report = reports.data;
+  const salePaymentsForCash = paymentType
+    ? (report?.by_payment_type.filter((item) => item.payment_type === paymentType) ?? [])
+    : (report?.by_payment_type ?? []);
+  const debtPaymentsForCash = paymentType === "DEBT" ? [] : (report?.debt_payments ?? []);
+  const cashReport = calculateCashReport(salePaymentsForCash, debtPaymentsForCash);
+  const cashMethods = (["CASH", "CARD", "TRANSFER", "MIXED"] as FinancePaymentMethod[])
+    .filter((method) => !paymentType || paymentType === method)
+    .map((method) => {
+      const sale = salePaymentsForCash.find((item) => item.payment_type === method);
+      const debt = debtPaymentsForCash.find((item) => item.payment_method === method);
+      return {
+        method,
+        saleAmount: Number(sale?.total_sales ?? 0),
+        debtAmount: Number(debt?.total_amount ?? 0),
+        totalAmount: Number(sale?.total_sales ?? 0) + Number(debt?.total_amount ?? 0),
+        saleCount: sale?.sale_count ?? 0,
+        debtPaymentCount: debt?.payment_count ?? 0
+      };
+    });
+  const cashMethodLabel = (method: FinancePaymentMethod) =>
+    method === "CASH"
+      ? tr("Naqd", "Наличные")
+      : method === "CARD"
+        ? tr("Plastik", "Карта")
+        : method === "TRANSFER"
+          ? tr("Bank o‘tkazmasi", "Перевод")
+          : tr("Aralash", "Смешанная оплата");
 
   const exportExcel = async () => {
     try {
@@ -126,6 +164,55 @@ export function ReportsPage() {
         <StatCard label={tr("Xarajatlar", "Расходы")} value={money(report?.summary.total_expenses)} icon={TrendingDown} tone="orange" />
         <StatCard label={tr("Sof foyda", "Чистая прибыль")} value={money(report?.summary.net_profit)} icon={WalletCards} tone={(report?.summary.net_profit ?? 0) >= 0 ? "purple" : "red"} />
       </div>
+
+      <Card
+        title={tr("Kassa tushumlari", "Поступления в кассу")}
+        actions={
+          <Badge tone="info">
+            {from === to ? date(`${from}T00:00:00`) : `${date(`${from}T00:00:00`)} - ${date(`${to}T00:00:00`)}`}
+          </Badge>
+        }
+        className="report-cash-card"
+      >
+        <p className="report-cash-description">
+          {tr(
+            "Tanlangan davrdagi haqiqiy tushum: darhol to‘langan sotuvlar va eski qarzlardan olingan to‘lovlar.",
+            "Фактические поступления за выбранный период: оплаченные продажи и платежи по старым долгам."
+          )}
+        </p>
+        <div className="report-cash-summary">
+          <div>
+            <span><Banknote size={17} /> {tr("Sotuvlardan tushum", "Поступления от продаж")}</span>
+            <strong>{money(cashReport.saleCollections)}</strong>
+          </div>
+          <div>
+            <span><HandCoins size={17} /> {tr("Eski qarzlardan tushum", "Погашение старых долгов")}</span>
+            <strong>{money(cashReport.debtCollections)}</strong>
+          </div>
+          <div className="report-cash-total">
+            <span><Calculator size={17} /> {tr("Kassaga jami tushgan", "Всего поступило в кассу")}</span>
+            <strong>{money(cashReport.totalCollections)}</strong>
+          </div>
+          <div className="report-cash-credit">
+            <span><CreditCard size={17} /> {tr("Qarzga sotuv (kassaga kirmaydi)", "Продажи в долг (не входят в кассу)")}</span>
+            <strong>{money(cashReport.creditSales)}</strong>
+          </div>
+        </div>
+        <div className="report-cash-methods">
+          {cashMethods.map((item) => (
+            <div className="report-cash-method" key={item.method}>
+              <i style={{ background: cashMethodColors[item.method] }} />
+              <div>
+                <strong>{cashMethodLabel(item.method)}</strong>
+                <small>
+                  {tr("Sotuv", "Продажи")}: {money(item.saleAmount)} ({item.saleCount}) · {tr("Qarz to‘lovi", "Погашение долга")}: {money(item.debtAmount)} ({item.debtPaymentCount})
+                </small>
+              </div>
+              <b>{money(item.totalAmount)}</b>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <div className="dashboard-grid">
         <Card title={tr("Kunlik sotuv va foyda", "Продажи и прибыль по дням")} className="chart-card report-chart">
