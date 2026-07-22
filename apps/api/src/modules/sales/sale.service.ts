@@ -9,12 +9,14 @@ const pdfFonts = (() => {
   const regularCandidates = [
     resolve(process.cwd(), "assets", "fonts", "DejaVuSans.ttf"),
     "C:\\Windows\\Fonts\\arial.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "/usr/share/fonts/TTF/DejaVuSans.ttf"
   ];
   const boldCandidates = [
     resolve(process.cwd(), "assets", "fonts", "DejaVuSans-Bold.ttf"),
     "C:\\Windows\\Fonts\\arialbd.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"
   ];
