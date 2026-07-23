@@ -194,6 +194,8 @@ h1, h2, h3, strong { font-family: "Manrope", "Segoe UI", system-ui, sans-serif; 
 .purchase-document-number { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .purchase-document-detail-cell { padding: 0 !important; background: #f8fafc; }
 .purchase-document-items { margin: 10px 14px 14px; overflow: hidden; border: 1px solid #dbe4f0; border-radius: 10px; background: #fff; }
+.purchase-document-detail-actions { min-height: 46px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf2f7; background: #f8fafc; }
+.purchase-document-detail-actions strong { color: #334155; font-size: 11px; }
 .purchase-document-item { min-height: 52px; padding: 8px 12px; display: grid; grid-template-columns: minmax(220px, 2fr) minmax(120px, 1fr) minmax(110px, .8fr) minmax(130px, 1fr) minmax(130px, 1fr) 80px; align-items: center; gap: 12px; border-bottom: 1px solid #edf2f7; font-size: 11px; }
 .purchase-document-item:last-child { border-bottom: 0; }
 .purchase-document-item-head { min-height: 38px; color: #64748b; background: #f8fafc; font-size: 9px; font-weight: 700; letter-spacing: .025em; text-transform: uppercase; }

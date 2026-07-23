@@ -20,6 +20,11 @@ type CreateSupplierReturnDocumentInput = {
   createdBy: string;
 };
 
+type SupplierReturnRowsInput = {
+  rows: Array<Omit<CreateSupplierReturnInput, "returnedAt" | "createdBy">>;
+  createdBy: string;
+};
+
 export class SupplierReturnRepository {
   async list(input: {
     page: number;
@@ -154,6 +159,75 @@ export class SupplierReturnRepository {
 
   createDocument(input: CreateSupplierReturnDocumentInput) {
     return withTransaction(async (client) => this.createDocumentWithClient(client, input));
+  }
+
+  appendDocument(id: string, input: SupplierReturnRowsInput) {
+    return withTransaction(async (client) => {
+      const documentResult = await client.query<{ id: string; document_number: string; returned_at: string }>(
+        `SELECT id, document_number, returned_at
+         FROM supplier_return_documents
+         WHERE id = $1 AND deleted_at IS NULL
+         FOR UPDATE`,
+        [id]
+      );
+      const document = documentResult.rows[0];
+      if (!document) {
+        throw new AppError(404, "Supplier return document not found", "SUPPLIER_RETURN_DOCUMENT_NOT_FOUND");
+      }
+
+      const productIds = [...new Set(input.rows.map((row) => row.productId))].sort();
+      const productResult = await client.query<{ id: string; name: string; stock_quantity: number }>(
+        `SELECT id, name, stock_quantity
+         FROM products
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         ORDER BY id
+         FOR UPDATE`,
+        [productIds]
+      );
+      if (productResult.rows.length !== productIds.length) {
+        throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");
+      }
+
+      const products = new Map(productResult.rows.map((product) => [product.id, product]));
+      const requestedByProduct = new Map<string, number>();
+      for (const row of input.rows) {
+        requestedByProduct.set(
+          row.productId,
+          Number(requestedByProduct.get(row.productId) ?? 0) + row.quantity
+        );
+      }
+      for (const [productId, requested] of requestedByProduct) {
+        const product = products.get(productId)!;
+        if (Number(product.stock_quantity) < requested) {
+          throw new AppError(
+            409,
+            `Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`,
+            "INSUFFICIENT_STOCK",
+            { productId, available: Number(product.stock_quantity), requested }
+          );
+        }
+      }
+
+      const created = [];
+      for (const row of input.rows) {
+        created.push(await this.createOneWithClient(client, document.id, {
+          ...row,
+          returnedAt: document.returned_at,
+          createdBy: input.createdBy
+        }));
+      }
+
+      return {
+        documentId: document.id,
+        documentNumber: document.document_number,
+        totalRows: created.length,
+        totalQuantity: created.reduce((sum, row) => sum + Number(row.quantity), 0),
+        totalFifoCost: created.reduce((sum, row) => sum + Number(row.fifo_cost), 0),
+        totalAgreedReturnAmount: created.reduce((sum, row) => sum + Number(row.total_agreed_return_amount), 0),
+        totalSupplierReturnProfit: created.reduce((sum, row) => sum + Number(row.supplier_return_profit), 0),
+        items: created
+      };
+    });
   }
 
   removeDocument(id: string, deletedBy: string) {

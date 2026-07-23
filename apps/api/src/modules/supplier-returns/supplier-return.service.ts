@@ -21,6 +21,14 @@ export class SupplierReturnService {
     return supplierReturnRepository.createDocument({ ...input, createdBy: userId });
   }
 
+  appendDocument(
+    id: string,
+    input: Parameters<typeof supplierReturnRepository.appendDocument>[1],
+    userId: string
+  ) {
+    return supplierReturnRepository.appendDocument(id, { ...input, createdBy: userId });
+  }
+
   remove(id: string, userId: string) {
     return supplierReturnRepository.remove(id, userId);
   }

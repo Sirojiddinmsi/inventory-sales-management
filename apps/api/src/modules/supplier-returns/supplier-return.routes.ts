@@ -4,6 +4,7 @@ import { validate } from "../../shared/validation.js";
 import { idParamSchema } from "../categories/category.schema.js";
 import { supplierReturnController } from "./supplier-return.controller.js";
 import {
+  supplierReturnAppendSchema,
   supplierReturnBulkCreateSchema,
   supplierReturnCreateSchema,
   supplierReturnListSchema
@@ -20,6 +21,12 @@ supplierReturnRouter.post(
   "/documents",
   validate(supplierReturnBulkCreateSchema),
   asyncHandler(supplierReturnController.createDocument)
+);
+supplierReturnRouter.post(
+  "/documents/:id/items",
+  validate(idParamSchema, "params"),
+  validate(supplierReturnAppendSchema),
+  asyncHandler(supplierReturnController.appendDocument)
 );
 supplierReturnRouter.delete(
   "/documents/:id",

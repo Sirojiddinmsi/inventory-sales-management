@@ -14,6 +14,12 @@ export class SupplierReturnController {
     res.status(201).json(await supplierReturnService.createDocument(req.body, req.user!.id));
   }
 
+  async appendDocument(req: Request, res: Response) {
+    res.status(201).json(
+      await supplierReturnService.appendDocument(String(req.params.id), req.body, req.user!.id)
+    );
+  }
+
   async remove(req: Request, res: Response) {
     res.json(await supplierReturnService.remove(String(req.params.id), req.user!.id));
   }

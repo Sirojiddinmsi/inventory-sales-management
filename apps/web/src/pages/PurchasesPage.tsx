@@ -167,6 +167,7 @@ export function PurchasesPage() {
   const [returnLines, setReturnLines] = useState<SupplierReturnLine[]>([newSupplierReturnLine()]);
   const [expandedReturnDocumentIds, setExpandedReturnDocumentIds] = useState<string[]>([]);
   const [deletingSupplierReturn, setDeletingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
+  const [appendingSupplierReturn, setAppendingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
   const [editingDocument, setEditingDocument] = useState<PurchaseDocument | null>(null);
   const [deletingPurchase, setDeletingPurchase] = useState<Purchase | null>(null);
   const [supplierModal, setSupplierModal] = useState(false);
@@ -324,9 +325,8 @@ export function PurchasesPage() {
   });
 
   const saveSupplierReturn = useMutation({
-    mutationFn: () => api<SupplierReturnDocument>("/supplier-returns/documents", {
-      method: "POST",
-      body: JSON.stringify({
+    mutationFn: () => {
+      const body = {
         returnedAt: supplierReturnDate
           ? new Date(`${supplierReturnDate}T12:00:00`).toISOString()
           : undefined,
@@ -337,11 +337,21 @@ export function PurchasesPage() {
           agreedReturnPricePerUnit: Number(line.agreedReturnPricePerUnit),
           note: line.note || null
         }))
-      })
-    }),
+      };
+      return appendingSupplierReturn
+        ? api(`/supplier-returns/documents/${appendingSupplierReturn.id}/items`, {
+            method: "POST",
+            body: JSON.stringify({ rows: body.rows })
+          })
+        : api("/supplier-returns/documents", {
+            method: "POST",
+            body: JSON.stringify(body)
+          });
+    },
     onSuccess: () => {
       toast.success(tr("Mahsulot yetkazib beruvchiga qaytarildi", "Возврат поставщику сохранен"));
       setSupplierReturnOpen(false);
+      setAppendingSupplierReturn(null);
       setReturnLines([newSupplierReturnLine()]);
       setSupplierReturnNote("");
       setSupplierReturnDate(newSupplierReturnDate());
@@ -579,8 +589,20 @@ export function PurchasesPage() {
   };
 
   const openSupplierReturn = () => {
+    setAppendingSupplierReturn(null);
     setSupplierReturnDate(newSupplierReturnDate());
     setSupplierReturnNote("");
+    setReturnLines([newSupplierReturnLine()]);
+    setSelectedProducts({});
+    setProductPickerLineKey(null);
+    setProductSearch("");
+    setSupplierReturnOpen(true);
+  };
+
+  const openAppendSupplierReturn = (document: SupplierReturnDocument) => {
+    setAppendingSupplierReturn(document);
+    setSupplierReturnDate(document.returned_at.slice(0, 10));
+    setSupplierReturnNote(document.note ?? "");
     setReturnLines([newSupplierReturnLine()]);
     setSelectedProducts({});
     setProductPickerLineKey(null);
@@ -928,6 +950,16 @@ export function PurchasesPage() {
                       <tr className="purchase-document-detail-row">
                         <td colSpan={10} className="purchase-document-detail-cell">
                           <div className="purchase-document-items supplier-return-items">
+                            <div className="purchase-document-detail-actions">
+                              <strong>{tr("Qaytarilgan mahsulotlar", "Возвращенные товары")}</strong>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => openAppendSupplierReturn(document)}
+                              >
+                                <Plus size={14} /> {tr("Mahsulot qatori qo‘shish", "Добавить строку товара")}
+                              </Button>
+                            </div>
                             <div className="purchase-document-item purchase-document-item-head supplier-return-item">
                               <span>{tr("Mahsulot", "\u0422\u043e\u0432\u0430\u0440")}</span>
                               <span>{tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}</span>
@@ -1165,13 +1197,16 @@ export function PurchasesPage() {
 
       <Modal
         open={supplierReturnOpen}
-        title={tr("Yetkazib beruvchiga qaytarish", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0443")}
+        title={appendingSupplierReturn
+          ? `${tr("Qaytarish hujjatiga mahsulot qo‘shish", "Добавить товар в документ возврата")} ${appendingSupplierReturn.document_number}`
+          : tr("Yetkazib beruvchiga qaytarish", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0443")}
         description={tr(
           "Bir hujjatda bir nechta mahsulotni FIFO bo‘yicha qaytaring. Bu sotuv sifatida hisoblanmaydi.",
           "\u0412\u043e\u0437\u0432\u0440\u0430\u0449\u0430\u0439\u0442\u0435 \u043d\u0435\u0441\u043a\u043e\u043b\u044c\u043a\u043e \u0442\u043e\u0432\u0430\u0440\u043e\u0432 \u0432 \u043e\u0434\u043d\u043e\u043c \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0435 \u043f\u043e FIFO. \u042d\u0442\u043e \u043d\u0435 \u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f \u043f\u0440\u043e\u0434\u0430\u0436\u0435\u0439."
         )}
         onClose={() => {
           setSupplierReturnOpen(false);
+          setAppendingSupplierReturn(null);
           setProductPickerLineKey(null);
         }}
         wide
@@ -1204,11 +1239,13 @@ export function PurchasesPage() {
                 label={tr("Hujjat sanasi *", "\u0414\u0430\u0442\u0430 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430 *")}
                 type="date"
                 value={supplierReturnDate}
+                disabled={Boolean(appendingSupplierReturn)}
                 onChange={(event) => setSupplierReturnDate(event.target.value)}
               />
               <Input
                 label={tr("Umumiy izoh", "\u041e\u0431\u0449\u0435\u0435 \u043f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435")}
                 value={supplierReturnNote}
+                disabled={Boolean(appendingSupplierReturn)}
                 onChange={(event) => setSupplierReturnNote(event.target.value)}
               />
             </div>
