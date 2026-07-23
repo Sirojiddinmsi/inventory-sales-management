@@ -27,3 +27,14 @@ export const supplierReturnBulkCreateSchema = z.object({
     })
   ).min(1).max(200)
 });
+
+export const supplierReturnAppendSchema = z.object({
+  rows: z.array(
+    z.object({
+      productId: z.uuid(),
+      quantity: z.coerce.number().positive(),
+      agreedReturnPricePerUnit: z.coerce.number().min(0),
+      note: z.string().trim().max(2000).nullish()
+    })
+  ).min(1).max(200)
+});
