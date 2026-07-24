@@ -29,6 +29,14 @@ export class SupplierReturnService {
     return supplierReturnRepository.appendDocument(id, { ...input, createdBy: userId });
   }
 
+  updateDocument(
+    id: string,
+    input: Parameters<typeof supplierReturnRepository.updateDocument>[1],
+    userId: string
+  ) {
+    return supplierReturnRepository.updateDocument(id, { ...input, updatedBy: userId });
+  }
+
   remove(id: string, userId: string) {
     return supplierReturnRepository.remove(id, userId);
   }

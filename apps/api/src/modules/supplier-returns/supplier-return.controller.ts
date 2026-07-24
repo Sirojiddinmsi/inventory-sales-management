@@ -20,6 +20,12 @@ export class SupplierReturnController {
     );
   }
 
+  async updateDocument(req: Request, res: Response) {
+    res.json(
+      await supplierReturnService.updateDocument(String(req.params.id), req.body, req.user!.id)
+    );
+  }
+
   async remove(req: Request, res: Response) {
     res.json(await supplierReturnService.remove(String(req.params.id), req.user!.id));
   }

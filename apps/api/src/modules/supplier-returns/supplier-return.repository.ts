@@ -230,6 +230,112 @@ export class SupplierReturnRepository {
     });
   }
 
+  updateDocument(id: string, input: {
+    returnedAt?: string;
+    note?: string | null;
+    rows: Array<Omit<CreateSupplierReturnInput, "returnedAt" | "createdBy">>;
+    updatedBy: string;
+  }) {
+    return withTransaction(async (client) => {
+      const documentResult = await client.query<{
+        id: string;
+        document_number: string;
+        returned_at: string;
+      }>(
+        `SELECT id, document_number, returned_at
+         FROM supplier_return_documents
+         WHERE id = $1 AND deleted_at IS NULL
+         FOR UPDATE`,
+        [id]
+      );
+      const document = documentResult.rows[0];
+      if (!document) {
+        throw new AppError(404, "Supplier return document not found", "SUPPLIER_RETURN_DOCUMENT_NOT_FOUND");
+      }
+
+      const oldReturnsResult = await client.query<{ id: string; product_id: string; quantity: number }>(
+        `SELECT id, product_id, quantity
+         FROM supplier_returns
+         WHERE supplier_return_document_id = $1 AND deleted_at IS NULL
+         ORDER BY id
+         FOR UPDATE`,
+        [id]
+      );
+      const productIds = [...new Set([
+        ...oldReturnsResult.rows.map((row) => row.product_id),
+        ...input.rows.map((row) => row.productId)
+      ])].sort();
+      if (productIds.length) {
+        await client.query(
+          `SELECT id FROM products WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE`,
+          [productIds]
+        );
+      }
+
+      // Restore every old FIFO allocation before validating the replacement lines.
+      for (const oldReturn of oldReturnsResult.rows) {
+        await this.removeOneWithClient(client, oldReturn.id, input.updatedBy);
+      }
+
+      const productResult = await client.query<{ id: string; name: string; stock_quantity: number }>(
+        `SELECT id, name, stock_quantity
+         FROM products
+         WHERE id = ANY($1::uuid[]) AND is_active = TRUE
+         ORDER BY id`,
+        [productIds]
+      );
+      if (productResult.rows.length !== productIds.length) {
+        throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");
+      }
+      const products = new Map(productResult.rows.map((product) => [product.id, product]));
+      const requestedByProduct = new Map<string, number>();
+      for (const row of input.rows) {
+        requestedByProduct.set(
+          row.productId,
+          Number(requestedByProduct.get(row.productId) ?? 0) + row.quantity
+        );
+      }
+      for (const [productId, requested] of requestedByProduct) {
+        const product = products.get(productId)!;
+        if (Number(product.stock_quantity) < requested) {
+          throw new AppError(
+            409,
+            `Insufficient stock for ${product.name}. Available: ${product.stock_quantity}`,
+            "INSUFFICIENT_STOCK",
+            { productId, available: Number(product.stock_quantity), requested }
+          );
+        }
+      }
+
+      const returnedAt = input.returnedAt ?? document.returned_at;
+      const created = [];
+      for (const row of input.rows) {
+        created.push(await this.createOneWithClient(client, document.id, {
+          ...row,
+          returnedAt,
+          createdBy: input.updatedBy
+        }));
+      }
+      await client.query(
+        `UPDATE supplier_return_documents
+         SET returned_at = $2, note = $3
+         WHERE id = $1`,
+        [id, returnedAt, input.note ?? null]
+      );
+
+      return {
+        documentId: document.id,
+        documentNumber: document.document_number,
+        totalRows: created.length,
+        totalQuantity: created.reduce((sum, row) => sum + Number(row.quantity), 0),
+        totalFifoCost: created.reduce((sum, row) => sum + Number(row.fifo_cost), 0),
+        totalAgreedReturnAmount: created.reduce((sum, row) => sum + Number(row.total_agreed_return_amount), 0),
+        totalSupplierReturnProfit: created.reduce((sum, row) => sum + Number(row.supplier_return_profit), 0),
+        items: created
+      };
+    });
+  }
+
   removeDocument(id: string, deletedBy: string) {
     return withTransaction(async (client) => {
       const documentResult = await client.query(

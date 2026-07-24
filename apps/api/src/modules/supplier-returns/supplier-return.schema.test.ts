@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { supplierReturnAppendSchema, supplierReturnCreateSchema } from "./supplier-return.schema.js";
+import {
+  supplierReturnAppendSchema,
+  supplierReturnCreateSchema,
+  supplierReturnUpdateSchema
+} from "./supplier-return.schema.js";
 
 const validInput = {
   productId: "ce61865c-0f1b-4f88-b8d2-7320575c1171",
@@ -43,5 +47,24 @@ describe("supplierReturnAppendSchema", () => {
 
   it("rejects an empty append request", () => {
     expect(supplierReturnAppendSchema.safeParse({ rows: [] }).success).toBe(false);
+  });
+});
+
+describe("supplierReturnUpdateSchema", () => {
+  it("accepts a complete document update", () => {
+    expect(supplierReturnUpdateSchema.safeParse({
+      returnedAt: validInput.returnedAt,
+      note: "Updated note",
+      rows: [{
+        productId: validInput.productId,
+        quantity: 4,
+        agreedReturnPricePerUnit: 35_000,
+        note: null
+      }]
+    }).success).toBe(true);
+  });
+
+  it("rejects an update without return lines", () => {
+    expect(supplierReturnUpdateSchema.safeParse({ rows: [] }).success).toBe(false);
   });
 });
