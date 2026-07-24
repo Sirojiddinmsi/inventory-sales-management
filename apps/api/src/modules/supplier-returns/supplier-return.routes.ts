@@ -7,7 +7,8 @@ import {
   supplierReturnAppendSchema,
   supplierReturnBulkCreateSchema,
   supplierReturnCreateSchema,
-  supplierReturnListSchema
+  supplierReturnListSchema,
+  supplierReturnUpdateSchema
 } from "./supplier-return.schema.js";
 
 export const supplierReturnRouter = Router();
@@ -27,6 +28,12 @@ supplierReturnRouter.post(
   validate(idParamSchema, "params"),
   validate(supplierReturnAppendSchema),
   asyncHandler(supplierReturnController.appendDocument)
+);
+supplierReturnRouter.patch(
+  "/documents/:id",
+  validate(idParamSchema, "params"),
+  validate(supplierReturnUpdateSchema),
+  asyncHandler(supplierReturnController.updateDocument)
 );
 supplierReturnRouter.delete(
   "/documents/:id",

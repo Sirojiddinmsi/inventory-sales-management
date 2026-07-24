@@ -167,7 +167,7 @@ export function PurchasesPage() {
   const [returnLines, setReturnLines] = useState<SupplierReturnLine[]>([newSupplierReturnLine()]);
   const [expandedReturnDocumentIds, setExpandedReturnDocumentIds] = useState<string[]>([]);
   const [deletingSupplierReturn, setDeletingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
-  const [appendingSupplierReturn, setAppendingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
+  const [editingSupplierReturn, setEditingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
   const [editingDocument, setEditingDocument] = useState<PurchaseDocument | null>(null);
   const [deletingPurchase, setDeletingPurchase] = useState<Purchase | null>(null);
   const [supplierModal, setSupplierModal] = useState(false);
@@ -338,10 +338,10 @@ export function PurchasesPage() {
           note: line.note || null
         }))
       };
-      return appendingSupplierReturn
-        ? api(`/supplier-returns/documents/${appendingSupplierReturn.id}/items`, {
-            method: "POST",
-            body: JSON.stringify({ rows: body.rows })
+      return editingSupplierReturn
+        ? api(`/supplier-returns/documents/${editingSupplierReturn.id}`, {
+            method: "PATCH",
+            body: JSON.stringify(body)
           })
         : api("/supplier-returns/documents", {
             method: "POST",
@@ -351,7 +351,7 @@ export function PurchasesPage() {
     onSuccess: () => {
       toast.success(tr("Mahsulot yetkazib beruvchiga qaytarildi", "Возврат поставщику сохранен"));
       setSupplierReturnOpen(false);
-      setAppendingSupplierReturn(null);
+      setEditingSupplierReturn(null);
       setReturnLines([newSupplierReturnLine()]);
       setSupplierReturnNote("");
       setSupplierReturnDate(newSupplierReturnDate());
@@ -469,14 +469,31 @@ export function PurchasesPage() {
     quantity: returnLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0),
     agreed: returnLines.reduce((sum, line) => sum + returnLineTotalAgreed(line), 0)
   }), [returnLines]);
+  const originalReturnQuantityByProduct = useMemo(() => {
+    const quantities = new Map<string, number>();
+    for (const item of editingSupplierReturn?.items ?? []) {
+      quantities.set(
+        item.product_id,
+        (quantities.get(item.product_id) ?? 0) + Number(item.quantity)
+      );
+    }
+    return quantities;
+  }, [editingSupplierReturn]);
   const canSaveSupplierReturn = Boolean(
     supplierReturnDate
     && returnLines.length > 0
     && returnLines.every((line) => {
       const selectedProduct = productById.get(line.productId);
+      const originalQuantity = originalReturnQuantityByProduct.get(line.productId) ?? 0;
+      const availableQuantity = selectedProduct
+        ? Number(selectedProduct.stock_quantity) + originalQuantity
+        : editingSupplierReturn && Boolean(line.productName)
+          ? Number.POSITIVE_INFINITY
+          : 0;
       return line.productId
+        && (selectedProduct || Boolean(line.productName))
         && Number(line.quantity) > 0
-        && Number(line.quantity) <= Number(selectedProduct?.stock_quantity ?? 0)
+        && Number(line.quantity) <= availableQuantity
         && line.agreedReturnPricePerUnit !== ""
         && Number(line.agreedReturnPricePerUnit) >= 0;
     })
@@ -589,7 +606,7 @@ export function PurchasesPage() {
   };
 
   const openSupplierReturn = () => {
-    setAppendingSupplierReturn(null);
+    setEditingSupplierReturn(null);
     setSupplierReturnDate(newSupplierReturnDate());
     setSupplierReturnNote("");
     setReturnLines([newSupplierReturnLine()]);
@@ -599,11 +616,18 @@ export function PurchasesPage() {
     setSupplierReturnOpen(true);
   };
 
-  const openAppendSupplierReturn = (document: SupplierReturnDocument) => {
-    setAppendingSupplierReturn(document);
+  const openEditSupplierReturn = (document: SupplierReturnDocument) => {
+    setEditingSupplierReturn(document);
     setSupplierReturnDate(document.returned_at.slice(0, 10));
     setSupplierReturnNote(document.note ?? "");
-    setReturnLines([newSupplierReturnLine()]);
+    setReturnLines(document.items.map((item) => newSupplierReturnLine({
+      productId: item.product_id,
+      productName: item.product_name,
+      productCode: item.product_code,
+      quantity: String(item.quantity),
+      agreedReturnPricePerUnit: String(item.agreed_return_price_per_unit),
+      note: item.note ?? ""
+    })));
     setSelectedProducts({});
     setProductPickerLineKey(null);
     setProductSearch("");
@@ -891,7 +915,7 @@ export function PurchasesPage() {
                 <th>{tr("Sana", "\u0414\u0430\u0442\u0430")}</th>
                 <th>{tr("Mahsulot qatorlari", "\u0421\u0442\u0440\u043e\u043a \u0442\u043e\u0432\u0430\u0440\u043e\u0432")}</th>
                 <th>{tr("Jami miqdor", "\u041e\u0431\u0449\u0435\u0435 \u043a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}</th>
-                <th>{tr("FIFO tannarx", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c")}</th>
+                <th>{tr("FIFO tannarx, jami", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c, \u0432\u0441\u0435\u0433\u043e")}</th>
                 <th>{tr("Kelishilgan jami summa", "\u041e\u0431\u0449\u0430\u044f \u0441\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430")}</th>
                 <th>{tr("Qaytarish foydasi", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")}</th>
                 <th>{tr("Izoh", "\u041f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435")}</th>
@@ -914,7 +938,7 @@ export function PurchasesPage() {
                       <td data-label={tr("Sana", "\u0414\u0430\u0442\u0430")}>{dateTime(document.returned_at)}</td>
                       <td data-label={tr("Mahsulot qatorlari", "\u0421\u0442\u0440\u043e\u043a \u0442\u043e\u0432\u0430\u0440\u043e\u0432")}><strong>{document.line_count}</strong></td>
                       <td data-label={tr("Jami miqdor", "\u041e\u0431\u0449\u0435\u0435 \u043a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}><strong>{number(document.total_quantity)}</strong></td>
-                      <td data-label={tr("FIFO tannarx", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c")}>{money(document.total_fifo_cost)}</td>
+                      <td data-label={tr("FIFO tannarx, jami", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c, \u0432\u0441\u0435\u0433\u043e")}>{money(document.total_fifo_cost)}</td>
                       <td data-label={tr("Kelishilgan jami summa", "\u041e\u0431\u0449\u0430\u044f \u0441\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430")}>{money(document.total_agreed_return_amount)}</td>
                       <td data-label={tr("Qaytarish foydasi", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")} className={document.total_supplier_return_profit >= 0 ? "positive" : "negative"}>
                         <strong>{money(document.total_supplier_return_profit)}</strong>
@@ -936,6 +960,15 @@ export function PurchasesPage() {
                             {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
                           </button>
                           <button
+                            type="button"
+                            className="icon-button"
+                            onClick={() => openEditSupplierReturn(document)}
+                            title={tr("Qaytarishni tahrirlash", "Редактировать возврат поставщику")}
+                            aria-label={tr("Qaytarishni tahrirlash", "Редактировать возврат поставщику")}
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
                             className="icon-button danger-icon"
                             onClick={() => setDeletingSupplierReturn(document)}
                             title={tr("Qaytarishni o‘chirish", "\u0423\u0434\u0430\u043b\u0438\u0442\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442")}
@@ -950,23 +983,16 @@ export function PurchasesPage() {
                       <tr className="purchase-document-detail-row">
                         <td colSpan={10} className="purchase-document-detail-cell">
                           <div className="purchase-document-items supplier-return-items">
-                            <div className="purchase-document-detail-actions">
+                            <div className="purchase-document-detail-heading">
                               <strong>{tr("Qaytarilgan mahsulotlar", "Возвращенные товары")}</strong>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => openAppendSupplierReturn(document)}
-                              >
-                                <Plus size={14} /> {tr("Mahsulot qatori qo‘shish", "Добавить строку товара")}
-                              </Button>
                             </div>
                             <div className="purchase-document-item purchase-document-item-head supplier-return-item">
                               <span>{tr("Mahsulot", "\u0422\u043e\u0432\u0430\u0440")}</span>
                               <span>{tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}</span>
-                              <span>{tr("FIFO tannarx", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c")}</span>
-                              <span>{tr("1 dona narx", "\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u0443")}</span>
-                              <span>{tr("Jami summa", "\u0418\u0442\u043e\u0433\u043e")}</span>
-                              <span>{tr("Foyda", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c")}</span>
+                              <span>{tr("FIFO tannarx, jami", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c, \u0432\u0441\u0435\u0433\u043e")}</span>
+                              <span>{tr("Kelishilgan narx, 1 dona uchun", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0446\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u0443")}</span>
+                              <span>{tr("Kelishilgan summa, jami", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430, \u0432\u0441\u0435\u0433\u043e")}</span>
+                              <span>{tr("Qaytarish foydasi", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")}</span>
                             </div>
                             {document.items.map((item) => (
                               <div className="purchase-document-item supplier-return-item" key={item.id}>
@@ -975,10 +1001,10 @@ export function PurchasesPage() {
                                   {item.note ? <small title={item.note}>{item.note}</small> : null}
                                 </div>
                                 <span data-label={tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}><strong>{number(item.quantity)} {item.unit}</strong></span>
-                                <span data-label={tr("FIFO tannarx", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c")}>{money(item.fifo_cost)}</span>
-                                <span data-label={tr("1 dona narx", "\u0426\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u0443")}>{money(item.agreed_return_price_per_unit)}</span>
-                                <span data-label={tr("Jami summa", "\u0418\u0442\u043e\u0433\u043e")}><strong>{money(item.total_agreed_return_amount)}</strong></span>
-                                <span data-label={tr("Foyda", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c")} className={item.supplier_return_profit >= 0 ? "positive" : "negative"}>
+                                <span data-label={tr("FIFO tannarx, jami", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c, \u0432\u0441\u0435\u0433\u043e")}>{money(item.fifo_cost)}</span>
+                                <span data-label={tr("Kelishilgan narx, 1 dona uchun", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0446\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u0443")}>{money(item.agreed_return_price_per_unit)}</span>
+                                <span data-label={tr("Kelishilgan summa, jami", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430, \u0432\u0441\u0435\u0433\u043e")}><strong>{money(item.total_agreed_return_amount)}</strong></span>
+                                <span data-label={tr("Qaytarish foydasi", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")} className={item.supplier_return_profit >= 0 ? "positive" : "negative"}>
                                   <strong>{money(item.supplier_return_profit)}</strong>
                                 </span>
                               </div>
@@ -1197,8 +1223,8 @@ export function PurchasesPage() {
 
       <Modal
         open={supplierReturnOpen}
-        title={appendingSupplierReturn
-          ? `${tr("Qaytarish hujjatiga mahsulot qo‘shish", "Добавить товар в документ возврата")} ${appendingSupplierReturn.document_number}`
+        title={editingSupplierReturn
+          ? `${tr("Yetkazib beruvchiga qaytarishni tahrirlash", "Редактировать возврат поставщику")} ${editingSupplierReturn.document_number}`
           : tr("Yetkazib beruvchiga qaytarish", "\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0443")}
         description={tr(
           "Bir hujjatda bir nechta mahsulotni FIFO bo‘yicha qaytaring. Bu sotuv sifatida hisoblanmaydi.",
@@ -1206,7 +1232,7 @@ export function PurchasesPage() {
         )}
         onClose={() => {
           setSupplierReturnOpen(false);
-          setAppendingSupplierReturn(null);
+          setEditingSupplierReturn(null);
           setProductPickerLineKey(null);
         }}
         wide
@@ -1224,7 +1250,9 @@ export function PurchasesPage() {
               disabled={!canSaveSupplierReturn}
               onClick={() => saveSupplierReturn.mutate()}
             >
-              <Undo2 size={16} /> {tr("Qaytarishni saqlash", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442")}
+              <Undo2 size={16} /> {editingSupplierReturn
+                ? tr("O‘zgarishlarni saqlash", "Сохранить изменения")
+                : tr("Qaytarishni saqlash", "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442")}
             </Button>
           </>
         }
@@ -1239,13 +1267,11 @@ export function PurchasesPage() {
                 label={tr("Hujjat sanasi *", "\u0414\u0430\u0442\u0430 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430 *")}
                 type="date"
                 value={supplierReturnDate}
-                disabled={Boolean(appendingSupplierReturn)}
                 onChange={(event) => setSupplierReturnDate(event.target.value)}
               />
               <Input
                 label={tr("Umumiy izoh", "\u041e\u0431\u0449\u0435\u0435 \u043f\u0440\u0438\u043c\u0435\u0447\u0430\u043d\u0438\u0435")}
                 value={supplierReturnNote}
-                disabled={Boolean(appendingSupplierReturn)}
                 onChange={(event) => setSupplierReturnNote(event.target.value)}
               />
             </div>
