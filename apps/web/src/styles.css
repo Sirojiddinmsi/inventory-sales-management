@@ -413,6 +413,8 @@ td code { padding: 3px 6px; color: #475569; background: #f1f5f9; border-radius: 
 .payment-history > div:last-child { border: 0; }
 .payment-history > div > span { display: flex; flex-direction: column; }
 .payment-history small { margin-top: 3px; color: var(--muted); }
+.payment-history-actions { align-items: flex-end; gap: 6px; text-align: right; }
+.inline-error { padding: 10px 12px; border: 1px solid #fecaca; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: 11px; }
 .payment-panel { padding: 17px; border-radius: 10px; background: #f8fafc; border: 1px solid var(--border); }
 .payment-panel h3 { font-size: 13px; }
 .quick-amounts { display: flex; gap: 7px; }

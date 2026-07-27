@@ -31,6 +31,15 @@ export class DebtService {
     return debtRepository.pay({ ...input, debtId, receivedBy: userId });
   }
 
+  updatePayment(
+    debtId: string,
+    paymentId: string,
+    input: Omit<Parameters<typeof debtRepository.updatePayment>[0], "debtId" | "paymentId" | "editedBy">,
+    userId: string
+  ) {
+    return debtRepository.updatePayment({ ...input, debtId, paymentId, editedBy: userId });
+  }
+
   archive(id: string, reason: string, userId: string) {
     return debtRepository.archive(id, reason, userId);
   }

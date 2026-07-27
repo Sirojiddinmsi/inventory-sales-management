@@ -22,6 +22,17 @@ export class DebtController {
     res.status(201).json(await debtService.pay(String(req.params.id), req.body, req.user!.id));
   }
 
+  async updatePayment(req: Request, res: Response) {
+    res.json(
+      await debtService.updatePayment(
+        String(req.params.id),
+        String(req.params.paymentId),
+        req.body,
+        req.user!.id
+      )
+    );
+  }
+
   async archive(req: Request, res: Response) {
     res.json(
       await debtService.archive(

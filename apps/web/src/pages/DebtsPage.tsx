@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ChevronDown, ChevronRight, CreditCard, HandCoins, Phone, Trash2, Undo2, Users } from "lucide-react";
+import { Archive, ChevronDown, ChevronRight, CreditCard, Edit3, HandCoins, Phone, Trash2, Undo2, Users } from "lucide-react";
 import { Fragment, useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import {
@@ -70,6 +70,15 @@ export function DebtsPage() {
   const [cardAmount, setCardAmount] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
   const [note, setNote] = useState("");
+  const [editingPayment, setEditingPayment] = useState<DebtPayment | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState<DebtPaymentMethod>("CASH");
+  const [editCashAmount, setEditCashAmount] = useState("");
+  const [editCardAmount, setEditCardAmount] = useState("");
+  const [editTransferAmount, setEditTransferAmount] = useState("");
+  const [editPaidAt, setEditPaidAt] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [confirmPaymentEdit, setConfirmPaymentEdit] = useState(false);
   const [archiveDebt, setArchiveDebt] = useState<Debt | null>(null);
   const [archiveReason, setArchiveReason] = useState("");
   const [purgeDebt, setPurgeDebt] = useState<Debt | null>(null);
@@ -117,6 +126,7 @@ export function DebtsPage() {
   const refreshDebts = () => {
     void queryClient.invalidateQueries({ queryKey: ["debts"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    void queryClient.invalidateQueries({ queryKey: ["reports"] });
   };
 
   const pay = useMutation({
@@ -139,6 +149,29 @@ export function DebtsPage() {
       setCardAmount("");
       setTransferAmount("");
       setNote("");
+      refreshDebts();
+      void queryClient.invalidateQueries({ queryKey: ["debt", selected?.id] });
+    },
+    onError: (error) => toast.error(error.message)
+  });
+
+  const updatePayment = useMutation({
+    mutationFn: () => api<Debt>(`/debts/${selected!.id}/payments/${editingPayment!.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        amount: Number(editAmount),
+        paymentMethod: editPaymentMethod,
+        cashAmount: editPaymentMethod === "MIXED" ? Number(editCashAmount || 0) : undefined,
+        cardAmount: editPaymentMethod === "MIXED" ? Number(editCardAmount || 0) : undefined,
+        transferAmount: editPaymentMethod === "MIXED" ? Number(editTransferAmount || 0) : undefined,
+        paidAt: new Date(editPaidAt).toISOString(),
+        note: editNote || null
+      })
+    }),
+    onSuccess: () => {
+      toast.success(tr("To‘lov yangilandi", "Платеж обновлен"));
+      setEditingPayment(null);
+      setConfirmPaymentEdit(false);
       refreshDebts();
       void queryClient.invalidateQueries({ queryKey: ["debt", selected?.id] });
     },
@@ -188,11 +221,45 @@ export function DebtsPage() {
     setNote("");
   };
 
+  const toDateTimeLocalInputValue = (value: string) => {
+    const date = new Date(value);
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const openPaymentEdit = (payment: DebtPayment) => {
+    setEditingPayment(payment);
+    setEditAmount(String(Number(payment.amount)));
+    setEditPaymentMethod(payment.payment_method);
+    setEditCashAmount(String(Number(payment.cash_amount ?? 0)));
+    setEditCardAmount(String(Number(payment.card_amount ?? 0)));
+    setEditTransferAmount(String(Number(payment.transfer_amount ?? 0)));
+    setEditPaidAt(toDateTimeLocalInputValue(payment.paid_at));
+    setEditNote(payment.note ?? "");
+    setConfirmPaymentEdit(false);
+  };
+
   const current = details.data ?? selected;
   const remaining = Number(current?.remaining_amount ?? 0);
   const isArchiveView = filter === "archive";
   const mixedTotal =
     Number(cashAmount || 0) + Number(cardAmount || 0) + Number(transferAmount || 0);
+  const editMixedTotal =
+    Number(editCashAmount || 0) + Number(editCardAmount || 0) + Number(editTransferAmount || 0);
+  const editablePaidByOtherPayments = (details.data?.payments ?? [])
+    .filter((payment) => payment.id !== editingPayment?.id)
+    .reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const editAmountNumber = Number(editAmount || 0);
+  const editWouldExceedDebt = Boolean(
+    current && editablePaidByOtherPayments + editAmountNumber > Number(current.amount) + 0.009
+  );
+  const canSavePaymentEdit = Boolean(
+    editingPayment &&
+      editAmountNumber > 0 &&
+      editPaidAt &&
+      !editWouldExceedDebt &&
+      (editPaymentMethod !== "MIXED" || Math.abs(editMixedTotal - editAmountNumber) <= 0.009)
+  );
 
   const paymentMethodLabel = (method: DebtPaymentMethod) =>
     method === "CASH"
@@ -506,7 +573,18 @@ export function DebtsPage() {
                     )}
                     {payment.note && <small>{payment.note}</small>}
                   </span>
-                  <span>{dateTime(payment.paid_at)}</span>
+                  <span className="payment-history-actions">
+                    <span>{dateTime(payment.paid_at)}</span>
+                    {isAdmin && (
+                      <button
+                        className="icon-button"
+                        title={tr("To‘lovni tahrirlash", "Редактировать платеж")}
+                        onClick={() => openPaymentEdit(payment)}
+                      >
+                        <Edit3 size={15} />
+                      </button>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>
@@ -584,6 +662,133 @@ export function DebtsPage() {
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(editingPayment)}
+        title={tr("Qarz to‘lovini tahrirlash", "Редактировать платеж по долгу")}
+        description={tr(
+          "Bu o‘zgarish faqat tanlangan to‘lovga ta’sir qiladi. Nakladnoy, FIFO va ombor o‘zgarmaydi.",
+          "Изменение затронет только выбранный платеж. Накладная, FIFO и склад не изменятся."
+        )}
+        onClose={() => setEditingPayment(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditingPayment(null)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={updatePayment.isPending}
+              disabled={!canSavePaymentEdit}
+              onClick={() => setConfirmPaymentEdit(true)}
+            >
+              {tr("O‘zgarishlarni saqlash", "Сохранить изменения")}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-stack">
+          <Input
+            label={tr("To‘lov summasi *", "Сумма оплаты *")}
+            type="number"
+            min="1"
+            value={editAmount}
+            onChange={(event) => setEditAmount(event.target.value)}
+          />
+          <Select
+            label={tr("To‘lov usuli *", "Способ оплаты *")}
+            value={editPaymentMethod}
+            onChange={(event) => setEditPaymentMethod(event.target.value as DebtPaymentMethod)}
+          >
+            <option value="CASH">{tr("Naqd", "Наличные")}</option>
+            <option value="CARD">{tr("Plastik", "Карта")}</option>
+            <option value="TRANSFER">{tr("Bank o‘tkazmasi", "Перевод")}</option>
+            <option value="MIXED">{tr("Aralash to‘lov", "Смешанная оплата")}</option>
+          </Select>
+          {editPaymentMethod === "MIXED" && (
+            <div className="form-grid">
+              <Input
+                label={tr("Naqd qismi", "Наличные")}
+                type="number"
+                min="0"
+                value={editCashAmount}
+                onChange={(event) => setEditCashAmount(event.target.value)}
+              />
+              <Input
+                label={tr("Karta qismi", "Карта")}
+                type="number"
+                min="0"
+                value={editCardAmount}
+                onChange={(event) => setEditCardAmount(event.target.value)}
+              />
+              <Input
+                label={tr("Transfer qismi", "Перевод")}
+                type="number"
+                min="0"
+                value={editTransferAmount}
+                onChange={(event) => setEditTransferAmount(event.target.value)}
+              />
+              <div className="calculated-field">
+                <span>{tr("Aralash jami", "Сумма смешанной оплаты")}</span>
+                <strong>{money(editMixedTotal)}</strong>
+              </div>
+            </div>
+          )}
+          <Input
+            label={tr("To‘lov sanasi va vaqti *", "Дата и время платежа *")}
+            type="datetime-local"
+            value={editPaidAt}
+            onChange={(event) => setEditPaidAt(event.target.value)}
+          />
+          <Textarea
+            label={tr("Izoh", "Примечание")}
+            value={editNote}
+            onChange={(event) => setEditNote(event.target.value)}
+          />
+          {editWouldExceedDebt && (
+            <div className="inline-error">
+              {tr(
+                "To‘lovlar jami qarz summasidan oshib ketmasligi kerak.",
+                "Сумма платежей не должна превышать общий долг."
+              )}
+            </div>
+          )}
+          {editPaymentMethod === "MIXED" && Math.abs(editMixedTotal - editAmountNumber) > 0.009 && (
+            <div className="inline-error">
+              {tr(
+                "Aralash to‘lov qismlari umumiy summaga teng bo‘lishi kerak.",
+                "Части смешанной оплаты должны равняться общей сумме."
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      <Modal
+        open={confirmPaymentEdit}
+        title={tr("To‘lovni yangilashni tasdiqlang", "Подтвердите изменение платежа")}
+        onClose={() => setConfirmPaymentEdit(false)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmPaymentEdit(false)}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={updatePayment.isPending}
+              disabled={!canSavePaymentEdit}
+              onClick={() => updatePayment.mutate()}
+            >
+              {tr("Saqlash", "Сохранить")}
+            </Button>
+          </>
+        }
+      >
+        <p className="confirm-message">
+          {tr(
+            "Tanlangan qarz to‘lovi yangilanadi. Qarz balansi va hisobotlar qayta hisoblanadi, ammo sotuv, FIFO, ombor va foyda o‘zgarmaydi.",
+            "Выбранный платеж по долгу будет обновлен. Баланс долга и отчеты пересчитаются, но продажа, FIFO, склад и прибыль не изменятся."
+          )}
+        </p>
       </Modal>
 
       <Modal
