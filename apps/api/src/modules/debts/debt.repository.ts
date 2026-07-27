@@ -468,11 +468,11 @@ export class DebtRepository {
 
       const updatedDebtResult = await client.query(
         `UPDATE debts
-         SET paid_amount = $2,
-             remaining_amount = $3,
+         SET paid_amount = $2::numeric,
+             remaining_amount = $3::numeric,
              status = CASE
-               WHEN $3 = 0 THEN 'PAID'::debt_status
-               WHEN $2 > 0 AND $3 > 0 THEN 'PARTIALLY_PAID'::debt_status
+               WHEN $3::numeric = 0::numeric THEN 'PAID'::debt_status
+               WHEN $2::numeric > 0::numeric AND $3::numeric > 0::numeric THEN 'PARTIALLY_PAID'::debt_status
                ELSE 'UNPAID'::debt_status
              END
          WHERE id = $1
