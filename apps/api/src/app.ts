@@ -14,7 +14,18 @@ import { asyncHandler } from "./shared/async-handler.js";
 export const app = express();
 
 app.set("trust proxy", 1);
-app.use(pinoHttp());
+app.use(
+  pinoHttp({
+    redact: {
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        "req.headers['set-cookie']"
+      ],
+      censor: "[REDACTED]"
+    }
+  })
+);
 app.use(helmet());
 app.use(
   cors({
