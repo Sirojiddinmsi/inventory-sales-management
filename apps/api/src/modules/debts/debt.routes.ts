@@ -4,7 +4,13 @@ import { asyncHandler } from "../../shared/async-handler.js";
 import { validate } from "../../shared/validation.js";
 import { idParamSchema } from "../categories/category.schema.js";
 import { debtController } from "./debt.controller.js";
-import { debtArchiveSchema, debtListSchema, debtPaymentSchema } from "./debt.schema.js";
+import {
+  debtArchiveSchema,
+  debtListSchema,
+  debtPaymentParamSchema,
+  debtPaymentSchema,
+  debtPaymentUpdateSchema
+} from "./debt.schema.js";
 
 export const debtRouter = Router();
 
@@ -17,6 +23,13 @@ debtRouter.post(
   validate(idParamSchema, "params"),
   validate(debtPaymentSchema),
   asyncHandler(debtController.pay)
+);
+debtRouter.patch(
+  "/:id/payments/:paymentId",
+  authorize("ADMIN"),
+  validate(debtPaymentParamSchema, "params"),
+  validate(debtPaymentUpdateSchema),
+  asyncHandler(debtController.updatePayment)
 );
 debtRouter.post(
   "/:id/archive",

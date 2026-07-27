@@ -1,6 +1,48 @@
 import { query, withTransaction } from "../../config/database.js";
 import { AppError } from "../../shared/errors/AppError.js";
 
+type DebtPaymentMethod = "CASH" | "CARD" | "TRANSFER" | "MIXED";
+
+function normalizePaymentSplit(input: {
+  amount: number;
+  paymentMethod: DebtPaymentMethod;
+  cashAmount?: number;
+  cardAmount?: number;
+  transferAmount?: number;
+}) {
+  const amount = Number(input.amount);
+  const cashAmount =
+    input.paymentMethod === "CASH"
+      ? amount
+      : input.paymentMethod === "MIXED"
+        ? Number(input.cashAmount ?? 0)
+        : 0;
+  const cardAmount =
+    input.paymentMethod === "CARD"
+      ? amount
+      : input.paymentMethod === "MIXED"
+        ? Number(input.cardAmount ?? 0)
+        : 0;
+  const transferAmount =
+    input.paymentMethod === "TRANSFER"
+      ? amount
+      : input.paymentMethod === "MIXED"
+        ? Number(input.transferAmount ?? 0)
+        : 0;
+  const splitTotal = cashAmount + cardAmount + transferAmount;
+
+  if (Math.abs(splitTotal - amount) > 0.009) {
+    throw new AppError(
+      422,
+      "Debt payment split must equal total amount",
+      "DEBT_PAYMENT_SPLIT_INVALID",
+      { amount, cashAmount, cardAmount, transferAmount }
+    );
+  }
+
+  return { amount, cashAmount, cardAmount, transferAmount };
+}
+
 export class DebtRepository {
   async list(input: {
     page: number;
@@ -278,7 +320,7 @@ export class DebtRepository {
   pay(input: {
     debtId: string;
     amount: number;
-    paymentMethod: "CASH" | "CARD" | "TRANSFER" | "MIXED";
+    paymentMethod: DebtPaymentMethod;
     cashAmount?: number;
     cardAmount?: number;
     transferAmount?: number;
@@ -306,27 +348,7 @@ export class DebtRepository {
         );
       }
 
-      const cashAmount =
-        input.paymentMethod === "CASH"
-          ? input.amount
-          : Number(input.cashAmount ?? 0);
-      const cardAmount =
-        input.paymentMethod === "CARD"
-          ? input.amount
-          : Number(input.cardAmount ?? 0);
-      const transferAmount =
-        input.paymentMethod === "TRANSFER"
-          ? input.amount
-          : Number(input.transferAmount ?? 0);
-      const splitTotal = cashAmount + cardAmount + transferAmount;
-      if (Math.abs(splitTotal - input.amount) > 0.009) {
-        throw new AppError(
-          422,
-          "Debt payment split must equal total amount",
-          "DEBT_PAYMENT_SPLIT_INVALID",
-          { amount: input.amount, cashAmount, cardAmount, transferAmount }
-        );
-      }
+      const { cashAmount, cardAmount, transferAmount } = normalizePaymentSplit(input);
 
       await client.query(
         `INSERT INTO debt_payments (
@@ -359,6 +381,120 @@ export class DebtRepository {
         [input.debtId, input.amount]
       );
       return result.rows[0];
+    });
+  }
+
+  updatePayment(input: {
+    debtId: string;
+    paymentId: string;
+    amount: number;
+    paymentMethod: DebtPaymentMethod;
+    cashAmount?: number;
+    cardAmount?: number;
+    transferAmount?: number;
+    paidAt: string;
+    note?: string | null;
+    editedBy: string;
+  }) {
+    return withTransaction(async (client) => {
+      const debtResult = await client.query<{
+        id: string;
+        amount: number;
+        archived_at: string | null;
+      }>("SELECT id, amount, archived_at FROM debts WHERE id = $1 FOR UPDATE", [input.debtId]);
+      const debt = debtResult.rows[0];
+      if (!debt) throw new AppError(404, "Debt not found", "DEBT_NOT_FOUND");
+      if (debt.archived_at) {
+        throw new AppError(409, "Archived debt payments cannot be edited", "DEBT_ARCHIVED");
+      }
+
+      const paymentResult = await client.query(
+        `SELECT dp.*, u.name AS received_by_name
+         FROM debt_payments dp
+         JOIN users u ON u.id = dp.received_by
+         WHERE dp.id = $1 AND dp.debt_id = $2
+         FOR UPDATE OF dp`,
+        [input.paymentId, input.debtId]
+      );
+      const oldPayment = paymentResult.rows[0];
+      if (!oldPayment) {
+        throw new AppError(404, "Debt payment not found", "DEBT_PAYMENT_NOT_FOUND");
+      }
+
+      const { amount, cashAmount, cardAmount, transferAmount } = normalizePaymentSplit(input);
+      const otherPaymentsResult = await client.query<{ total: string }>(
+        `SELECT COALESCE(SUM(amount), 0) AS total
+         FROM debt_payments
+         WHERE debt_id = $1 AND id <> $2`,
+        [input.debtId, input.paymentId]
+      );
+      const paidByOtherPayments = Number(otherPaymentsResult.rows[0]?.total ?? 0);
+      const newPaidAmount = paidByOtherPayments + amount;
+      const debtAmount = Number(debt.amount);
+      if (newPaidAmount - debtAmount > 0.009) {
+        throw new AppError(
+          422,
+          "Payment cannot exceed remaining debt",
+          "PAYMENT_EXCEEDS_DEBT",
+          { debtAmount, paidByOtherPayments, amount }
+        );
+      }
+      const newRemainingAmount = Math.max(0, debtAmount - newPaidAmount);
+
+      const updatedPaymentResult = await client.query(
+        `UPDATE debt_payments
+         SET amount = $3,
+             payment_method = $4,
+             cash_amount = $5,
+             card_amount = $6,
+             transfer_amount = $7,
+             paid_at = $8,
+             note = $9
+         WHERE id = $1 AND debt_id = $2
+         RETURNING *`,
+        [
+          input.paymentId,
+          input.debtId,
+          amount,
+          input.paymentMethod,
+          cashAmount,
+          cardAmount,
+          transferAmount,
+          input.paidAt,
+          input.note ?? null
+        ]
+      );
+      const updatedPayment = updatedPaymentResult.rows[0];
+
+      const updatedDebtResult = await client.query(
+        `UPDATE debts
+         SET paid_amount = $2,
+             remaining_amount = $3,
+             status = CASE
+               WHEN $3 = 0 THEN 'PAID'::debt_status
+               WHEN $2 > 0 AND $3 > 0 THEN 'PARTIALLY_PAID'::debt_status
+               ELSE 'UNPAID'::debt_status
+             END
+         WHERE id = $1
+         RETURNING *`,
+        [input.debtId, newPaidAmount, newRemainingAmount]
+      );
+
+      await client.query(
+        `INSERT INTO debt_payment_audit_logs (
+           debt_payment_id, debt_id, action, before_data, after_data, edited_by
+         )
+         VALUES ($1, $2, 'UPDATE', $3, $4, $5)`,
+        [
+          input.paymentId,
+          input.debtId,
+          JSON.stringify(oldPayment),
+          JSON.stringify(updatedPayment),
+          input.editedBy
+        ]
+      );
+
+      return updatedDebtResult.rows[0];
     });
   }
 

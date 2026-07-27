@@ -64,6 +64,15 @@ export const debtPaymentSchema = z.object({
   }
 });
 
+export const debtPaymentUpdateSchema = debtPaymentSchema.safeExtend({
+  paidAt: z.iso.datetime()
+});
+
+export const debtPaymentParamSchema = z.object({
+  id: z.uuid(),
+  paymentId: z.uuid()
+});
+
 export const debtArchiveSchema = z.object({
   reason: z.string().trim().min(2).max(1000)
 });
