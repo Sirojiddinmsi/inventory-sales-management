@@ -1427,7 +1427,7 @@ export function SalesPage() {
                       )}
                     </span>
                     <span className="sale-product-picker-copy">
-                      <strong>{item.name}</strong>
+                      <strong title={item.name}>{item.name}</strong>
                       <small>{item.code || tr("Kodsiz", "Без кода")}</small>
                       <small>{tr("Qoldiq", "Остаток")}: {number(item.stock_quantity)} {item.unit}</small>
                     </span>
