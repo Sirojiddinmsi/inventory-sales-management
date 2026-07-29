@@ -303,6 +303,7 @@ export function SalesPage() {
     return map;
   }, [products.data?.data, selectedProducts]);
   const filteredProducts = useMemo(() => {
+    if (!productPickerLineKey) return [];
     const term = productSearch.trim().toLowerCase();
     const items = products.data?.data ?? [];
     if (!term) return items;
@@ -498,7 +499,9 @@ export function SalesPage() {
     setProductPickerLineKey(null);
     setProductSearch("");
     setModalOpen(true);
-    void queryClient.invalidateQueries({ queryKey: ["products", "sale-select"] });
+    if (!isDesktopLayout) {
+      void queryClient.invalidateQueries({ queryKey: ["products", "sale-select"] });
+    }
   };
 
   const openEdit = async (sale: Sale) => {
@@ -1254,8 +1257,8 @@ export function SalesPage() {
         </div>
       </Modal>
 
-      <Modal
-        open={customerPickerOpen}
+      {customerPickerOpen ? <Modal
+        open
         title={tr("Mijozni tanlash", "Выбор клиента")}
         description={tr(
           "Mijoz ismi yoki telefon raqami bo‘yicha qidiring.",
@@ -1319,7 +1322,7 @@ export function SalesPage() {
             )}
           </div>
         </div>
-      </Modal>
+      </Modal> : null}
 
       <Modal
         open={newCustomerOpen}
@@ -1373,8 +1376,8 @@ export function SalesPage() {
         </div>
       </Modal>
 
-      <Modal
-        open={Boolean(productPickerLineKey)}
+      {productPickerLineKey ? <Modal
+        open
         title={tr("Mahsulotni tanlash", "Выбор товара")}
         description={tr(
           "Nom, kod, kategoriya yoki joylashuv yozing. Qidiruv barcha mahsulotlar bo'yicha serverda ishlaydi.",
@@ -1476,7 +1479,7 @@ export function SalesPage() {
             )}
           </div>
         </div>
-      </Modal>
+      </Modal> : null}
 
       <Modal
         open={Boolean(saleImagePreview)}

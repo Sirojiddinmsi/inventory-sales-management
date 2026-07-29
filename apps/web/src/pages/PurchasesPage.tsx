@@ -321,7 +321,9 @@ export function PurchasesPage() {
     queryKey: ["suppliers", "all"],
     queryFn: () => api<Paginated<Contact>>("/suppliers", {
       params: { limit: 100, sortOrder: "asc" }
-    })
+    }),
+    enabled: !isDesktopLayout || modalOpen || supplierReturnOpen || supplierModal,
+    staleTime: 30_000
   });
   const categories = useQuery({
     queryKey: ["categories", "purchase-quick-create"],
@@ -622,6 +624,7 @@ export function PurchasesPage() {
   const selectedPickerProductId = selectedReturnPickerLine?.productId
     ?? (productPickerLineKey === SUPPLIER_RETURN_PICKER ? returnLines[0]?.productId : selectedPickerLine?.productId);
   const filteredProducts = useMemo(() => {
+    if (!productPickerLineKey) return [];
     const term = productSearch.trim().toLowerCase();
     const items = products.data?.data ?? [];
     if (!term) return items;
@@ -1797,8 +1800,8 @@ export function PurchasesPage() {
         </div>
       </Modal>
 
-      <Modal
-        open={Boolean(productPickerLineKey)}
+      {productPickerLineKey ? <Modal
+        open
         title={tr("Mahsulotni tanlash", "Выбор товара")}
         description={tr(
           "Nom, kod, kategoriya yoki joylashuv yozing. Qidiruv barcha mahsulotlar bo‘yicha serverda ishlaydi.",
@@ -1894,7 +1897,7 @@ export function PurchasesPage() {
             )}
           </div>
         </div>
-      </Modal>
+      </Modal> : null}
 
       <ProductDetailsModal product={detailsProduct} onClose={() => setDetailsProduct(null)} />
 
