@@ -92,7 +92,13 @@ export function AppShell() {
 
       <div className="main-column">
         <header className="topbar">
-          <button className="icon-button menu-button" onClick={() => setMobileOpen(true)}>
+          <button
+            className="icon-button menu-button"
+            onClick={() => {
+              setProfileOpen(false);
+              setMobileOpen(true);
+            }}
+          >
             <Menu size={22} />
           </button>
           <div className="topbar-title">
@@ -101,7 +107,13 @@ export function AppShell() {
           </div>
           <div className="topbar-actions">
             <div className="profile">
-              <button className="profile-button" onClick={() => setProfileOpen((value) => !value)}>
+              <button
+                className="profile-button"
+                onClick={() => {
+                  setMobileOpen(false);
+                  setProfileOpen((value) => !value);
+                }}
+              >
                 <span className="avatar">
                   {user?.profile_image_url ? (
                     <img src={user.profile_image_url} alt={user.name} />
