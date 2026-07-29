@@ -151,6 +151,9 @@ const newLine = (): SaleLine => ({
   discount: "0"
 });
 
+const productImageUrl = (product?: Product) =>
+  product?.image_urls?.[0] ?? product?.image_url ?? null;
+
 function toDateTimeLocalInputValue(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -208,7 +211,11 @@ export function SalesPage() {
   const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<Record<string, Product>>({});
   const [selectingProductId, setSelectingProductId] = useState<string | null>(null);
+  const [expandedMobileLineKeys, setExpandedMobileLineKeys] = useState<string[]>([]);
+  const [swipedMobileLineKey, setSwipedMobileLineKey] = useState<string | null>(null);
+  const [saleImagePreview, setSaleImagePreview] = useState<{ name: string; url: string } | null>(null);
   const productSearchRef = useRef<HTMLInputElement | null>(null);
+  const mobileSwipeStartX = useRef<number | null>(null);
 
   const sales = useQuery({
     queryKey: ["sales", page, search, paymentFilter, from, to, archived],
@@ -479,6 +486,8 @@ export function SalesPage() {
     setCustomerPickerOpen(false);
     setCustomerSearch("");
     setNewCustomerOpen(false);
+    setExpandedMobileLineKeys([]);
+    setSwipedMobileLineKey(null);
   };
 
   const openCreate = () => {
@@ -664,6 +673,39 @@ export function SalesPage() {
     setProductPickerLineKey(line.key);
     setProductSearch("");
   };
+
+  const removeSaleLine = (lineKey: string) => {
+    setLines((current) => current.length === 1 ? current : current.filter((line) => line.key !== lineKey));
+    setExpandedMobileLineKeys((current) => current.filter((key) => key !== lineKey));
+    setSwipedMobileLineKey((current) => current === lineKey ? null : current);
+  };
+
+  const toggleMobileLine = (lineKey: string) => {
+    setSwipedMobileLineKey(null);
+    setExpandedMobileLineKeys((current) =>
+      current.includes(lineKey)
+        ? current.filter((key) => key !== lineKey)
+        : [...current, lineKey]
+    );
+  };
+
+  const adjustMobileQuantity = (line: SaleLine, direction: 1 | -1) => {
+    const product = productById.get(line.productId);
+    const fractional = allowsFractionalQuantity(line.unit, product?.unit);
+    const step = fractional ? 0.001 : 1;
+    const current = Number(line.quantity || 0);
+    const next = Math.max(step, current + step * direction);
+    const normalized = fractional ? String(Math.round(next * 1000) / 1000) : String(Math.round(next));
+    updateLine(line.key, "quantity", normalized);
+  };
+
+  const addMobileSaleLine = () => {
+    const line = newLine();
+    setLines((current) => [...current, line]);
+    setExpandedMobileLineKeys((current) => [...current, line.key]);
+    window.setTimeout(() => openProductPicker(line), 0);
+  };
+
   const chooseProduct = async (lineKey: string, productId: string) => {
     setSelectingProductId(productId);
     try {
@@ -687,6 +729,7 @@ export function SalesPage() {
           };
         })
       );
+      setExpandedMobileLineKeys((current) => current.filter((key) => key !== lineKey));
       setProductPickerLineKey(null);
       setProductSearch("");
     } catch (error) {
@@ -909,6 +952,9 @@ export function SalesPage() {
         footer={
           <>
             <div className="modal-total"><span>{tr("To‘lov summasi", "Сумма к оплате")}</span><strong>{money(total)}</strong></div>
+            <Button className="sale-mobile-add-product" variant="secondary" onClick={addMobileSaleLine}>
+              <Plus size={18} /> {tr("Mahsulot qo'shish", "Добавить товар")}
+            </Button>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{tr("Bekor qilish", "Отмена")}</Button>
               <Button
                 loading={save.isPending}
@@ -928,7 +974,7 @@ export function SalesPage() {
           <div className="sale-section">
             <div className="section-title">
               <div><ShoppingCart size={17} /><strong>{tr("Mahsulotlar", "Товары")}</strong></div>
-              <Button variant="secondary" size="sm" onClick={() => setLines((current) => [...current, newLine()])}>
+              <Button className="sale-desktop-add-row" variant="secondary" size="sm" onClick={() => setLines((current) => [...current, newLine()])}>
                 <Plus size={14} /> {tr("Qator qo‘shish", "Добавить строку")}
               </Button>
             </div>
@@ -955,8 +1001,78 @@ export function SalesPage() {
                     : 0;
                 const availableForEdit =
                   Number(product?.stock_quantity ?? 0) + originalCredit;
+                const mobileExpanded = expandedMobileLineKeys.includes(line.key);
+                const lineImageUrl = productImageUrl(product);
+                const lineTotal = Number(line.quantity) * Number(line.salePrice) - Number(line.discount);
                 return (
-                  <div className={`sale-line ${validationError ? "sale-line-invalid" : ""}`} key={line.key}>
+                  <div
+                    className={`sale-line-swipe-shell ${swipedMobileLineKey === line.key ? "swiped" : ""}`}
+                    key={line.key}
+                    onTouchStart={(event) => {
+                      mobileSwipeStartX.current = event.touches[0]?.clientX ?? null;
+                    }}
+                    onTouchEnd={(event) => {
+                      const startX = mobileSwipeStartX.current;
+                      const endX = event.changedTouches[0]?.clientX;
+                      mobileSwipeStartX.current = null;
+                      if (startX === null || endX === undefined) return;
+                      if (startX - endX > 52) setSwipedMobileLineKey(line.key);
+                      if (endX - startX > 24) setSwipedMobileLineKey(null);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="sale-mobile-swipe-delete"
+                      disabled={lines.length === 1}
+                      onClick={() => removeSaleLine(line.key)}
+                      aria-label={tr("Mahsulotni o'chirish", "Удалить товар")}
+                    >
+                      <Trash2 size={19} />
+                    </button>
+                    <div className={`sale-line ${validationError ? "sale-line-invalid" : ""} ${mobileExpanded ? "mobile-expanded" : "mobile-collapsed"}`}>
+                    <div className="sale-mobile-card-summary">
+                      {product ? (
+                        <button
+                          type="button"
+                          className="sale-mobile-product-image"
+                          onClick={() => lineImageUrl ? setSaleImagePreview({ name: product.name, url: lineImageUrl }) : openProductPicker(line)}
+                          aria-label={lineImageUrl ? tr("Rasmni kattalashtirish", "Увеличить фото") : tr("Mahsulotni tanlash", "Выбрать товар")}
+                        >
+                          {lineImageUrl ? <img src={lineImageUrl} alt={product.name} loading="lazy" /> : <ShoppingCart size={21} />}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="sale-mobile-product-image sale-mobile-product-placeholder"
+                          onClick={() => openProductPicker(line)}
+                          aria-label={tr("Mahsulotni tanlash", "Выбрать товар")}
+                        >
+                          <Search size={20} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="sale-mobile-card-main"
+                        onClick={() => product ? toggleMobileLine(line.key) : openProductPicker(line)}
+                      >
+                        <strong className="sale-mobile-product-name" title={product?.name}>
+                          {product?.name ?? tr("Mahsulotni tanlang", "Выберите товар")}
+                        </strong>
+                        {product ? (
+                          <small>{number(Number(line.quantity || 0))} {line.unit || product.unit} x {money(Number(line.salePrice || 0))}</small>
+                        ) : (
+                          <small>{tr("Nom yoki kod orqali qidiring", "Ищите по названию или коду")}</small>
+                        )}
+                      </button>
+                      {product ? (
+                        <div className="sale-mobile-quantity-controls" aria-label={tr("Miqdorni tez o'zgartirish", "Быстро изменить количество")}>
+                          <button type="button" onClick={() => adjustMobileQuantity(line, -1)} aria-label={tr("Miqdorni kamaytirish", "Уменьшить количество")}>-</button>
+                          <span>{number(Number(line.quantity || 0))}</span>
+                          <button type="button" onClick={() => adjustMobileQuantity(line, 1)} aria-label={tr("Miqdorni oshirish", "Увеличить количество")}>+</button>
+                        </div>
+                      ) : null}
+                      <strong className="sale-mobile-card-total">{money(lineTotal)}</strong>
+                    </div>
                     <span className="line-number">{index + 1}</span>
                     <div className="sale-line-product">
                       <span className="sale-mobile-label">{tr("Mahsulot", "Товар")}</span>
@@ -1028,7 +1144,7 @@ export function SalesPage() {
                     <button
                       className="icon-button danger-icon sale-line-remove"
                       disabled={lines.length === 1}
-                      onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}
+                      onClick={() => removeSaleLine(line.key)}
                       aria-label={tr("Qatorni o‘chirish", "Удалить строку")}
                     >
                       <Trash2 size={16} />
@@ -1060,6 +1176,7 @@ export function SalesPage() {
                         : "\u00a0"}
                     </small>
                     {validationError && <small className="sale-line-error">{validationError}</small>}
+                  </div>
                   </div>
                 );
               })}
@@ -1298,23 +1415,21 @@ export function SalesPage() {
                   <button
                     key={item.id}
                     type="button"
-                    className={`product-picker-item ${isSelected ? "active" : ""}`}
+                    className={`product-picker-item sale-product-picker-item ${isSelected ? "active" : ""}`}
                     disabled={disabled || selectingProductId !== null}
                     onClick={() => selectedPickerLine && void chooseProduct(selectedPickerLine.key, item.id)}
                   >
-                    <span>
+                    <span className="sale-product-picker-image">
+                      {productImageUrl(item) ? (
+                        <img src={productImageUrl(item)!} alt="" loading="lazy" />
+                      ) : (
+                        <ShoppingCart size={21} />
+                      )}
+                    </span>
+                    <span className="sale-product-picker-copy">
                       <strong>{item.name}</strong>
-                      <small>
-                        {item.code} · {item.category_name} · {item.unit}
-                        {item.location ? ` · ${item.location}` : ""}
-                      </small>
-                      <small className="product-price-details">
-                        {tr("FIFO tannarx", "FIFO-себестоимость")}: {money(item.next_fifo_cost ?? item.purchase_price)}
-                        {" · "}
-                        {tr("Tavsiya narxi", "Рекомендуемая цена")}: {item.sale_price > 0 ? money(item.sale_price) : "—"}
-                        {" · "}
-                        {tr("Oxirgi sotuv", "Последняя продажа")}: {item.last_sale_price ? money(item.last_sale_price) : "—"}
-                      </small>
+                      <small>{item.code || tr("Kodsiz", "Без кода")}</small>
+                      <small>{tr("Qoldiq", "Остаток")}: {number(item.stock_quantity)} {item.unit}</small>
                     </span>
                     <em>
                       {selectingProductId === item.id
@@ -1331,6 +1446,26 @@ export function SalesPage() {
             )}
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(saleImagePreview)}
+        title={saleImagePreview?.name ?? tr("Mahsulot rasmi", "Фото товара")}
+        onClose={() => setSaleImagePreview(null)}
+        className="sale-image-preview-modal"
+      >
+        {saleImagePreview ? (
+          <div className="sale-image-preview-frame">
+            <img
+              src={saleImagePreview.url}
+              alt={saleImagePreview.name}
+              onError={() => {
+                toast.error(tr("Rasmni yuklab bo'lmadi", "Не удалось загрузить фото"));
+                setSaleImagePreview(null);
+              }}
+            />
+          </div>
+        ) : null}
       </Modal>
 
       <Modal
