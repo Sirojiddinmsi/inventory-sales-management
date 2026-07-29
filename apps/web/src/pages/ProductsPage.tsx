@@ -1043,7 +1043,7 @@ export function ProductsPage() {
             {products.data?.data.map((product) => (
               <tr
                 key={product.id}
-                className={selectedProductIds.includes(product.id) ? "table-row-selected" : ""}
+                className={`product-list-row ${selectedProductIds.includes(product.id) ? "table-row-selected" : ""}`}
               >
                 <td data-label={tr("Tanlash", "Выбор")} className="checkbox-cell">
                   <label className="table-checkbox">
