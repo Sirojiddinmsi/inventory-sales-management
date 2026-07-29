@@ -1056,10 +1056,10 @@ td strong { color: #1e293b; font-size: 12px; }
   .settings-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
-  .sidebar { transform: translateX(-100%); transition: transform .2s ease; box-shadow: 15px 0 45px rgba(15,23,42,.2); }
+  .sidebar { z-index: 100; transform: translateX(-100%); transition: transform .2s ease; box-shadow: 15px 0 45px rgba(15,23,42,.2); }
   .sidebar-open { transform: translateX(0); }
   .sidebar-close, .menu-button { display: inline-grid !important; }
-  .sidebar-overlay { position: fixed; inset: 0; z-index: 25; border: 0; background: rgba(15,23,42,.4); }
+  .sidebar-overlay { position: fixed; inset: 0; z-index: 90; border: 0; background: rgba(15,23,42,.4); }
   .main-column { width: 100%; margin-left: 0; }
   .topbar { padding: 0 20px; }
   .page-content { padding: 25px 20px 40px; }
@@ -1116,7 +1116,7 @@ td strong { color: #1e293b; font-size: 12px; }
   .product-details-tabs { padding: 8px 14px 0; overflow-x: auto; }
   .product-details-information, .product-details-history { padding: 14px; }
   .product-details-hero { grid-template-columns: 1fr; gap: 14px; }
-  .product-details-main-image { height: clamp(240px, 42dvh, 320px); }
+  .product-details-main-image { height: clamp(260px, 48dvh, 360px); overflow: visible; }
   .product-details-heading h3 { font-size: 18px; }
   .product-details-stock { margin-top: 12px; padding: 11px 12px; }
   .product-details-prices, .product-details-fields { grid-template-columns: 1fr; }
@@ -1195,14 +1195,16 @@ td strong { color: #1e293b; font-size: 12px; }
   .field-label, .sale-mobile-label { font-size: 11px; }
   .page-header h1 { font-size: 22px; }
   .page-header p { font-size: 12px; line-height: 1.5; }
-  .topbar { height: auto; min-height: 68px; padding: 10px 14px; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .topbar-actions { width: 100%; justify-content: space-between; gap: 8px; }
+  .topbar { height: 68px; min-height: 68px; padding: 8px 12px; align-items: center; gap: 8px; flex-wrap: nowrap; }
+  .menu-button { margin-right: 0; flex: 0 0 auto; }
+  .topbar-actions { width: auto; margin-left: auto; flex: 0 0 auto; justify-content: flex-end; gap: 6px; }
   .language-switch button { min-width: 40px; height: 32px; }
-  .profile-button { min-height: 44px; padding: 6px 8px; }
+  .profile-button { min-height: 44px; padding: 4px; gap: 0; }
+  .profile-button > svg { display: none; }
   .profile { position: static; }
   .profile-menu {
     position: fixed;
-    top: 62px;
+    top: calc(68px + env(safe-area-inset-top));
     right: 12px;
     left: auto;
     width: min(220px, calc(100vw - 24px));
