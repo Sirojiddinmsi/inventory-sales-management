@@ -115,11 +115,13 @@ export function ProductDetailsModal({ product, onClose, onEdit, initialSection =
                   disabled={!currentImage || imageFailed}
                   aria-label={tr("Rasmni kattalashtirish", "Увеличить изображение")}
                 >
-                  {currentImage && !imageFailed ? (
-                    <img src={currentImage} alt={product.name} loading="lazy" onError={() => setImageFailed(true)} />
-                  ) : (
-                    <span className="product-details-image-fallback"><ImageOff size={36} /><small>{tr("Rasm yo'q", "Нет фото")}</small></span>
-                  )}
+                  <span className="product-details-image-stage">
+                    {currentImage && !imageFailed ? (
+                      <img src={currentImage} alt={product.name} loading="lazy" onError={() => setImageFailed(true)} />
+                    ) : (
+                      <span className="product-details-image-fallback"><ImageOff size={36} /><small>{tr("Rasm yo'q", "Нет фото")}</small></span>
+                    )}
+                  </span>
                 </button>
                 {images.length > 1 ? (
                   <div className="product-details-thumbnails" aria-label={tr("Mahsulot rasmlari", "Фотографии товара")}>
