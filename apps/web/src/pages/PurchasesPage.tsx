@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Camera,
   ChevronDown,
   ChevronRight,
   Edit3,
   FileSpreadsheet,
+  ImagePlus,
   PackagePlus,
   Plus,
   Search,
@@ -32,7 +34,9 @@ import { useI18n } from "../contexts/I18nContext";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
 import type {
+  Category,
   Contact,
+  MeasurementUnit,
   Paginated,
   Product,
   Purchase,
@@ -53,6 +57,18 @@ type PurchaseLine = {
   location: string;
   purchasedAt: string;
   note: string;
+};
+
+type QuickProductForm = {
+  name: string;
+  categoryId: string;
+  code: string;
+  unit: string;
+  location: string;
+  purchasePrice: string;
+  salePrice: string;
+  description: string;
+  imageUrls: string[];
 };
 
 type ImportRow = {
@@ -112,6 +128,68 @@ const newPurchaseLine = (defaults?: Partial<PurchaseLine>): PurchaseLine => ({
   purchasedAt: defaults?.purchasedAt ?? new Date().toISOString().slice(0, 10),
   note: defaults?.note ?? ""
 });
+
+const newQuickProductForm = (): QuickProductForm => ({
+  name: "",
+  categoryId: "",
+  code: "",
+  unit: "",
+  location: "",
+  purchasePrice: "",
+  salePrice: "",
+  description: "",
+  imageUrls: []
+});
+
+const allowedProductImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+async function imageFileToCanvas(file: File) {
+  if ("createImageBitmap" in window) {
+    return createImageBitmap(file);
+  }
+
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Unable to read image"));
+    };
+    image.src = objectUrl;
+  });
+}
+
+async function compressProductImage(file: File) {
+  if (file.size <= 1024 * 1024) return file;
+
+  const source = await imageFileToCanvas(file);
+  const sourceWidth = "width" in source ? source.width : 0;
+  const sourceHeight = "height" in source ? source.height : 0;
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(sourceWidth, sourceHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Image compression is not available");
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  if ("close" in source) source.close();
+
+  for (const quality of [0.84, 0.74, 0.64]) {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+    if (blob && blob.size <= 4.5 * 1024 * 1024) {
+      return new File([blob], `${file.name.replace(/\.[^.]+$/, "") || "product"}.webp`, {
+        type: "image/webp"
+      });
+    }
+  }
+
+  throw new Error("Image is too large after compression");
+}
 
 const headerAliases = {
   product: ["mahsulot kodi yoki nomi", "mahsulot", "product", "product code", "product name", "code"],
@@ -185,8 +263,15 @@ export function PurchasesPage() {
   const [productSearch, setProductSearch] = useState("");
   const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<Record<string, Product>>({});
+  const [quickProductOpen, setQuickProductOpen] = useState(false);
+  const [quickProductTargetLineKey, setQuickProductTargetLineKey] = useState<string | null>(null);
+  const [quickProductForm, setQuickProductForm] = useState<QuickProductForm>(newQuickProductForm);
+  const [quickProductPreviewUrl, setQuickProductPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const productSearchRef = useRef<HTMLInputElement>(null);
+  const quickProductCameraInputRef = useRef<HTMLInputElement>(null);
+  const quickProductGalleryInputRef = useRef<HTMLInputElement>(null);
+  const quickProductImageTokenRef = useRef("");
 
   const purchases = useQuery({
     queryKey: ["purchases", page, search, from, to],
@@ -232,6 +317,16 @@ export function PurchasesPage() {
       params: { limit: 100, sortOrder: "asc" }
     })
   });
+  const categories = useQuery({
+    queryKey: ["categories", "purchase-quick-create"],
+    queryFn: () => api<Paginated<Category>>("/categories", { params: { limit: 100, sortOrder: "asc" } }),
+    enabled: quickProductOpen
+  });
+  const units = useQuery({
+    queryKey: ["units"],
+    queryFn: () => api<MeasurementUnit[]>("/units"),
+    enabled: quickProductOpen
+  });
 
   useEffect(() => {
     setPage(1);
@@ -253,6 +348,9 @@ export function PurchasesPage() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [productPickerLineKey, productSearch]);
+  useEffect(() => () => {
+    if (quickProductPreviewUrl) URL.revokeObjectURL(quickProductPreviewUrl);
+  }, [quickProductPreviewUrl]);
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["purchases"] });
@@ -312,6 +410,69 @@ export function PurchasesPage() {
       refresh();
     },
     onError: (error) => toast.error(error.message)
+  });
+
+  const uploadQuickProductImage = useMutation({
+    mutationFn: async ({ file, token }: { file: File; token: string }) => {
+      const compressed = await compressProductImage(file);
+      const body = new FormData();
+      body.append("images", compressed);
+      const response = await api<{ urls: string[] }>("/products/images", { method: "POST", body });
+      return { ...response, token };
+    },
+    onSuccess: ({ urls, token }) => {
+      if (quickProductImageTokenRef.current !== token) return;
+      setQuickProductForm((current) => ({ ...current, imageUrls: urls.slice(0, 1) }));
+      toast.success(tr("Rasm tayyor", "Фото готово"));
+    },
+    onError: (error) => {
+      if (quickProductImageTokenRef.current) {
+        toast.error(error instanceof Error ? error.message : tr("Rasm yuklanmadi", "Не удалось загрузить фото"));
+      }
+    }
+  });
+
+  const createQuickProduct = useMutation({
+    mutationFn: () =>
+      api<Product>("/products", {
+        method: "POST",
+        body: JSON.stringify({
+          name: quickProductForm.name.trim(),
+          categoryId: quickProductForm.categoryId,
+          code: quickProductForm.code.trim() || undefined,
+          unit: quickProductForm.unit,
+          purchasePrice: Number(quickProductForm.purchasePrice),
+          salePrice: Number(quickProductForm.salePrice || 0),
+          stockQuantity: 0,
+          minimumStock: 0,
+          location: quickProductForm.location.trim() || null,
+          imageUrl: quickProductForm.imageUrls[0] || null,
+          imageUrls: quickProductForm.imageUrls,
+          description: quickProductForm.description.trim() || null
+        })
+      }),
+    onSuccess: async (product) => {
+      const lineKey = quickProductTargetLineKey;
+      setSelectedProducts((current) => ({ ...current, [product.id]: product }));
+      if (lineKey) {
+        setLines((current) => current.map((line) =>
+          line.key === lineKey
+            ? {
+                ...line,
+                productId: product.id,
+                productName: product.name,
+                productCode: product.code,
+                purchasePrice: String(product.purchase_price),
+                location: product.location ?? line.location
+              }
+            : line
+        ));
+      }
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success(tr("Yangi mahsulot tanlandi", "Новый товар выбран"));
+      closeQuickProductModal();
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : tr("Mahsulot saqlanmadi", "Не удалось сохранить товар"))
   });
 
   const removePurchase = useMutation({
@@ -531,6 +692,84 @@ export function PurchasesPage() {
 
   const removeRow = (key: string) =>
     setLines((current) => current.length === 1 ? current : current.filter((line) => line.key !== key));
+
+  const clearQuickProductPhoto = () => {
+    quickProductImageTokenRef.current = "";
+    setQuickProductForm((current) => ({ ...current, imageUrls: [] }));
+    setQuickProductPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  };
+
+  const closeQuickProductModal = () => {
+    clearQuickProductPhoto();
+    setQuickProductOpen(false);
+    setQuickProductTargetLineKey(null);
+    setQuickProductForm(newQuickProductForm());
+  };
+
+  const openQuickProductModal = () => {
+    if (!productPickerLineKey || productPickerLineKey.startsWith(SUPPLIER_RETURN_PICKER)) return;
+    setQuickProductTargetLineKey(productPickerLineKey);
+    setQuickProductForm({
+      ...newQuickProductForm(),
+      name: productSearch.trim(),
+      purchasePrice: lines.find((line) => line.key === productPickerLineKey)?.purchasePrice ?? ""
+    });
+    setProductPickerLineKey(null);
+    setProductSearch("");
+    setQuickProductOpen(true);
+  };
+
+  const updateQuickProduct = (field: keyof Omit<QuickProductForm, "imageUrls">, value: string) =>
+    setQuickProductForm((current) => ({ ...current, [field]: value }));
+
+  const selectQuickProductImage = (file?: File) => {
+    if (!file) return;
+    if (!allowedProductImageTypes.has(file.type)) {
+      toast.error(tr("Faqat JPG, PNG yoki WebP rasm tanlang", "Выберите фото JPG, PNG или WebP"));
+      return;
+    }
+
+    const token = crypto.randomUUID();
+    quickProductImageTokenRef.current = token;
+    setQuickProductForm((current) => ({ ...current, imageUrls: [] }));
+    setQuickProductPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return URL.createObjectURL(file);
+    });
+    uploadQuickProductImage.mutate({ file, token });
+  };
+
+  const openQuickProductCamera = async () => {
+    try {
+      if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+        quickProductGalleryInputRef.current?.click();
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } }
+      });
+      stream.getTracks().forEach((track) => track.stop());
+      quickProductCameraInputRef.current?.click();
+    } catch {
+      toast(tr("Kamera ochilmadi, galereyani tanlang", "Камера недоступна, выберите фото из галереи"), { icon: "i" });
+      quickProductGalleryInputRef.current?.click();
+    }
+  };
+
+  const canCreateQuickProduct = Boolean(
+    quickProductForm.name.trim().length >= 2
+    && quickProductForm.categoryId
+    && quickProductForm.unit
+    && quickProductForm.purchasePrice !== ""
+    && Number(quickProductForm.purchasePrice) >= 0
+    && Number.isFinite(Number(quickProductForm.purchasePrice))
+    && Number(quickProductForm.salePrice || 0) >= 0
+    && Number.isFinite(Number(quickProductForm.salePrice || 0))
+    && !uploadQuickProductImage.isPending
+  );
 
   const openCreate = () => {
     const initialDate = new Date().toISOString().slice(0, 10);
@@ -1521,6 +1760,11 @@ export function PurchasesPage() {
               )}
             </div>
           </label>
+          {productPickerLineKey && !productPickerLineKey.startsWith(SUPPLIER_RETURN_PICKER) ? (
+            <Button className="purchase-create-product-action" variant="secondary" onClick={openQuickProductModal}>
+              <Plus size={17} /> {tr("Yangi mahsulot yaratish", "Создать новый товар")}
+            </Button>
+          ) : null}
           <div className="product-picker-results">
             {products.isFetching ? (
               <div className="product-picker-empty">
@@ -1549,6 +1793,155 @@ export function PurchasesPage() {
                 {tr("Mos mahsulot topilmadi.", "Подходящий товар не найден.")}
               </div>
             )}
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={quickProductOpen}
+        title={tr("Yangi mahsulot yaratish", "Создать новый товар")}
+        description={tr(
+          "Mahsulot yaratilgach, ayni kirim qatoriga avtomatik tanlanadi.",
+          "После сохранения товар будет автоматически выбран в текущей строке прихода."
+        )}
+        onClose={closeQuickProductModal}
+        wide
+        className="purchase-quick-product-modal"
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeQuickProductModal}>
+              {tr("Bekor qilish", "Отмена")}
+            </Button>
+            <Button
+              loading={createQuickProduct.isPending}
+              disabled={!canCreateQuickProduct}
+              onClick={() => createQuickProduct.mutate()}
+            >
+              <Plus size={16} /> {tr("Mahsulotni yaratish", "Создать товар")}
+            </Button>
+          </>
+        }
+      >
+        <div className="form-grid purchase-quick-product-form">
+          <Input
+            label={tr("Mahsulot nomi *", "Название товара *")}
+            value={quickProductForm.name}
+            onChange={(event) => updateQuickProduct("name", event.target.value)}
+            autoFocus
+          />
+          <Select
+            label={tr("Kategoriya *", "Категория *")}
+            value={quickProductForm.categoryId}
+            onChange={(event) => updateQuickProduct("categoryId", event.target.value)}
+          >
+            <option value="">{tr("Tanlang", "Выберите")}</option>
+            {categories.data?.data.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
+            ))}
+          </Select>
+          <Input
+            label={tr("Mahsulot kodi", "Код товара")}
+            value={quickProductForm.code}
+            onChange={(event) => updateQuickProduct("code", event.target.value)}
+            placeholder={tr("Ixtiyoriy", "Необязательно")}
+          />
+          <Select
+            label={tr("Birlik *", "Единица *")}
+            value={quickProductForm.unit}
+            onChange={(event) => updateQuickProduct("unit", event.target.value)}
+          >
+            <option value="">{tr("Birlikni tanlang", "Выберите единицу")}</option>
+            {units.data?.map((unit) => (
+              <option key={unit.id} value={unit.name}>{unit.name}</option>
+            ))}
+          </Select>
+          <Input
+            label={tr("Polka / yashik joylashuvi", "Полка / ящик")}
+            value={quickProductForm.location}
+            onChange={(event) => updateQuickProduct("location", event.target.value)}
+            placeholder={tr("Masalan: Polka A1", "Например: Полка A1")}
+          />
+          <Input
+            label={tr("Kirim narxi *", "Закупочная цена *")}
+            type="number"
+            min="0"
+            inputMode="decimal"
+            value={quickProductForm.purchasePrice}
+            onChange={(event) => updateQuickProduct("purchasePrice", event.target.value)}
+          />
+          <Input
+            label={tr("Tavsiya sotuv narxi", "Рекомендуемая цена продажи")}
+            type="number"
+            min="0"
+            inputMode="decimal"
+            value={quickProductForm.salePrice}
+            onChange={(event) => updateQuickProduct("salePrice", event.target.value)}
+            placeholder={tr("Ixtiyoriy", "Необязательно")}
+          />
+          <Textarea
+            className="full"
+            label={tr("Izoh", "Примечание")}
+            value={quickProductForm.description}
+            onChange={(event) => updateQuickProduct("description", event.target.value)}
+            placeholder={tr("Ixtiyoriy", "Необязательно")}
+          />
+          <div className="full purchase-quick-product-photo">
+            <span className="field-label">{tr("Mahsulot rasmi", "Фото товара")}</span>
+            <input
+              ref={quickProductCameraInputRef}
+              hidden
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+              onChange={(event) => {
+                selectQuickProductImage(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            <input
+              ref={quickProductGalleryInputRef}
+              hidden
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                selectQuickProductImage(event.target.files?.[0]);
+                event.target.value = "";
+              }}
+            />
+            {quickProductPreviewUrl || quickProductForm.imageUrls[0] ? (
+              <div className="purchase-quick-product-preview">
+                <img
+                  src={quickProductPreviewUrl ?? quickProductForm.imageUrls[0]}
+                  alt={tr("Mahsulot rasmi", "Фото товара")}
+                />
+                <div>
+                  <strong>{uploadQuickProductImage.isPending ? tr("Rasm tayyorlanmoqda...", "Подготовка фото...") : tr("Rasm tanlandi", "Фото выбрано")}</strong>
+                  <small>{tr("Katta rasm avtomatik siqiladi", "Большое фото сжимается автоматически")}</small>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button danger-icon"
+                  onClick={clearQuickProductPhoto}
+                  aria-label={tr("Rasmni o'chirish", "Удалить фото")}
+                >
+                  <Trash2 size={18} />
+                </button>
+              </div>
+            ) : (
+              <div className="purchase-quick-product-photo-empty">
+                <ImagePlus size={22} />
+                <span>{tr("Rasm qo'shing", "Добавьте фото")}</span>
+                <small>JPG, PNG, WebP</small>
+              </div>
+            )}
+            <div className="purchase-quick-product-photo-actions">
+              <Button type="button" variant="secondary" onClick={() => void openQuickProductCamera()}>
+                <Camera size={17} /> {tr("Rasmga olish", "Сделать фото")}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => quickProductGalleryInputRef.current?.click()}>
+                <ImagePlus size={17} /> {tr("Galereyadan tanlash", "Выбрать из галереи")}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>
