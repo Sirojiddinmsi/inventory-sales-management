@@ -193,6 +193,7 @@ h1, h2, h3, strong { font-family: "Manrope", "Segoe UI", system-ui, sans-serif; 
 .purchase-document-row.expanded td { background: #f8fbff; }
 .purchase-document-number { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .purchase-document-detail-cell { padding: 0 !important; background: #f8fafc; }
+.purchase-document-export-actions { padding: 10px 14px 0; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .purchase-document-items { margin: 10px 14px 14px; overflow: hidden; border: 1px solid #dbe4f0; border-radius: 10px; background: #fff; }
 .purchase-document-detail-heading { min-height: 38px; padding: 8px 12px; display: flex; align-items: center; border-bottom: 1px solid #edf2f7; background: #f8fafc; }
 .purchase-document-detail-heading strong { color: #334155; font-size: 11px; }
@@ -1167,6 +1168,8 @@ td strong { color: #1e293b; font-size: 12px; }
   .table-wrap td.purchase-document-detail-cell { width: 100%; padding: 0 !important; display: block; border: 0; text-align: left; }
   .table-wrap td.purchase-document-detail-cell::before { display: none; }
   .purchase-document-items { margin: 0 0 12px; border-radius: 12px; }
+  .purchase-document-export-actions { padding: 10px 0; justify-content: stretch; }
+  .purchase-document-export-actions .button { flex: 1 1 145px; }
   .purchase-document-item-head { display: none; }
   .purchase-document-item { min-height: 0; padding: 12px; display: flex; flex-direction: column; align-items: stretch; gap: 0; }
   .purchase-document-item > * { min-height: 38px; padding: 7px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #edf2f7; text-align: right; }

@@ -3,6 +3,7 @@ import {
   Camera,
   ChevronDown,
   ChevronRight,
+  Download,
   Edit3,
   FileSpreadsheet,
   ImagePlus,
@@ -264,6 +265,10 @@ export function PurchasesPage() {
   const [importFileName, setImportFileName] = useState("");
   const [importError, setImportError] = useState("");
   const [parsingExcel, setParsingExcel] = useState(false);
+  const [exportingDocument, setExportingDocument] = useState<{
+    id: string;
+    format: "pdf" | "xlsx";
+  } | null>(null);
   const [productPickerLineKey, setProductPickerLineKey] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState("");
   const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
@@ -927,6 +932,27 @@ export function PurchasesPage() {
     }
   };
 
+  const exportPurchaseDocument = async (document: PurchaseDocument, format: "pdf" | "xlsx") => {
+    setExportingDocument({ id: document.id, format });
+    try {
+      const safeNumber = document.document_number.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const datePart = document.purchased_at.slice(0, 10);
+      await download(
+        `/purchases/documents/${document.id}/export.${format}`,
+        `kirim-${safeNumber}-${datePart}.${format}`
+      );
+      toast.success(format === "pdf"
+        ? tr("PDF yuklandi", "PDF скачан")
+        : tr("Excel yuklandi", "Excel скачан"));
+    } catch (error) {
+      toast.error(error instanceof Error
+        ? error.message
+        : tr("Hujjatni yuklab bo‘lmadi", "Не удалось скачать документ"));
+    } finally {
+      setExportingDocument(null);
+    }
+  };
+
   const parseExcel = async (file: File) => {
     setParsingExcel(true);
     setImportFileName(file.name);
@@ -1069,6 +1095,8 @@ export function PurchasesPage() {
           <tbody>
             {purchases.data?.data.map((document) => {
               const expanded = expandedDocumentIds.includes(document.id);
+              const exportingPdf = exportingDocument?.id === document.id && exportingDocument.format === "pdf";
+              const exportingExcel = exportingDocument?.id === document.id && exportingDocument.format === "xlsx";
               return (
                 <Fragment key={document.id}>
                   <tr className={expanded ? "purchase-document-row expanded" : "purchase-document-row"}>
@@ -1106,6 +1134,28 @@ export function PurchasesPage() {
                         </button>
                         <button
                           type="button"
+                          className="icon-button"
+                          disabled={Boolean(exportingDocument)}
+                          aria-busy={exportingPdf}
+                          onClick={() => void exportPurchaseDocument(document, "pdf")}
+                          title={tr("PDF yuklab olish", "Скачать PDF")}
+                          aria-label={tr("PDF yuklab olish", "Скачать PDF")}
+                        >
+                          <Download size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          disabled={Boolean(exportingDocument)}
+                          aria-busy={exportingExcel}
+                          onClick={() => void exportPurchaseDocument(document, "xlsx")}
+                          title={tr("Excel yuklab olish", "Скачать Excel")}
+                          aria-label={tr("Excel yuklab olish", "Скачать Excel")}
+                        >
+                          <FileSpreadsheet size={16} />
+                        </button>
+                        <button
+                          type="button"
                           className="icon-button purchase-document-toggle"
                           onClick={() => setExpandedDocumentIds((current) =>
                             current.includes(document.id)
@@ -1125,6 +1175,26 @@ export function PurchasesPage() {
                   {expanded ? (
                     <tr className="purchase-document-detail-row">
                       <td colSpan={8} className="purchase-document-detail-cell">
+                        <div className="purchase-document-export-actions">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            loading={exportingPdf}
+                            disabled={Boolean(exportingDocument) && !exportingPdf}
+                            onClick={() => void exportPurchaseDocument(document, "pdf")}
+                          >
+                            <Download size={15} /> {tr("PDF yuklab olish", "Скачать PDF")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            loading={exportingExcel}
+                            disabled={Boolean(exportingDocument) && !exportingExcel}
+                            onClick={() => void exportPurchaseDocument(document, "xlsx")}
+                          >
+                            <FileSpreadsheet size={15} /> {tr("Excel yuklab olish", "Скачать Excel")}
+                          </Button>
+                        </div>
                         <div className="purchase-document-items">
                           <div className="purchase-document-item purchase-document-item-head">
                             <span>{tr("Mahsulot", "Товар")}</span>

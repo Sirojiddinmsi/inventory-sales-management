@@ -43,7 +43,69 @@ type PurchaseRow = {
   deleted_at: string | null;
 };
 
+export type PurchaseDocumentExport = {
+  id: string;
+  document_number: string;
+  purchased_at: string;
+  created_at: string;
+  created_by_name: string;
+  supplier_name: string | null;
+  items: Array<{
+    id: string;
+    product_name: string;
+    product_code: string;
+    category_name: string;
+    unit: string;
+    quantity: number;
+    product_location: string | null;
+    purchase_price: number;
+    total_cost: number;
+    purchased_at: string;
+    supplier_name: string | null;
+    note: string | null;
+  }>;
+};
+
 export class PurchaseRepository {
+  async findDocumentForExport(id: string): Promise<PurchaseDocumentExport | null> {
+    const documentResult = await query<{
+      id: string;
+      document_number: string;
+      purchased_at: string;
+      created_at: string;
+      created_by_name: string;
+      supplier_name: string | null;
+    }>(
+      `SELECT pd.id, pd.document_number, pd.purchased_at, pd.created_at,
+              u.name AS created_by_name, s.name AS supplier_name
+       FROM purchase_documents pd
+       JOIN users u ON u.id = pd.created_by
+       LEFT JOIN suppliers s ON s.id = pd.supplier_id
+       WHERE pd.id = $1`,
+      [id]
+    );
+    const document = documentResult.rows[0];
+    if (!document) return null;
+
+    const itemsResult = await query<PurchaseDocumentExport["items"][number]>(
+      `SELECT pu.id, p.name AS product_name, p.code AS product_code,
+              c.name AS category_name, p.unit,
+              pu.quantity, COALESCE(pu.location, p.location) AS product_location,
+              pu.purchase_price, pu.total_cost, pu.purchased_at,
+              s.name AS supplier_name, pu.note
+       FROM purchases pu
+       JOIN products p ON p.id = pu.product_id
+       JOIN categories c ON c.id = p.category_id
+       LEFT JOIN suppliers s ON s.id = pu.supplier_id
+       WHERE pu.purchase_document_id = $1 AND pu.deleted_at IS NULL
+       ORDER BY pu.purchased_at ASC, pu.created_at ASC, pu.id ASC`,
+      [id]
+    );
+    if (itemsResult.rows.length === 0) return null;
+
+    return { ...document, items: itemsResult.rows };
+  }
+
   async list(input: {
     page: number;
     limit: number;

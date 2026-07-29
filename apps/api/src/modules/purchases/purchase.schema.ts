@@ -20,6 +20,7 @@ export const purchaseCreateSchema = z.object({
 });
 
 export const purchaseUpdateSchema = purchaseCreateSchema;
+export const purchaseDocumentIdSchema = z.object({ id: z.uuid() });
 
 export const purchaseDocumentUpdateSchema = z.object({
   rows: z.array(
