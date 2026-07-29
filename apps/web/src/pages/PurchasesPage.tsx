@@ -34,6 +34,8 @@ import { useI18n } from "../contexts/I18nContext";
 import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
+import { productImageUrl } from "../lib/productImage";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import type {
   Category,
   Contact,
@@ -232,6 +234,7 @@ function toIsoDateTime(value: string) {
 export function PurchasesPage() {
   const queryClient = useQueryClient();
   const { tr } = useI18n();
+  const isDesktopLayout = useMediaQuery("(min-width: 901px)");
   const [page, setPage] = useState(1);
   const [expandedDocumentIds, setExpandedDocumentIds] = useState<string[]>([]);
   const [returnPage, setReturnPage] = useState(1);
@@ -311,7 +314,7 @@ export function PurchasesPage() {
         sortOrder: "asc"
       }
     }),
-    enabled: modalOpen || importOpen || supplierReturnOpen || Boolean(productPickerLineKey),
+    enabled: importOpen || Boolean(productPickerLineKey) || (!isDesktopLayout && (modalOpen || supplierReturnOpen)),
     staleTime: 30_000
   });
   const suppliers = useQuery({
@@ -1387,7 +1390,7 @@ export function PurchasesPage() {
               {lines.map((line, index) => {
                 const selectedProduct = productById.get(line.productId);
                 const mobileExpanded = expandedPurchaseLineKey === line.key;
-                const imageUrl = selectedProduct?.image_urls?.[0] ?? selectedProduct?.image_url ?? null;
+                const imageUrl = productImageUrl(selectedProduct);
                 return (
                   <div id={`purchase-line-${line.key}`} className={`sale-line purchase-line ${mobileExpanded ? "purchase-mobile-expanded" : "purchase-mobile-collapsed"}`} key={line.key}>
                     <span className="line-number">{index + 1}</span>
@@ -1428,6 +1431,15 @@ export function PurchasesPage() {
                         className={`sale-product-trigger ${line.productId ? "selected" : ""}`}
                         onClick={() => openProductPicker(line.key)}
                       >
+                        {line.productId ? (
+                          <span className="selected-product-thumbnail" aria-hidden="true">
+                            {imageUrl ? (
+                              <img src={imageUrl} alt="" loading="lazy" />
+                            ) : (
+                              <PackagePlus size={18} />
+                            )}
+                          </span>
+                        ) : null}
                         <span className="sale-product-trigger-copy">
                           <strong>
                             {selectedProduct?.name ?? line.productName ?? tr("Mahsulotni tanlang", "Выберите товар")}
@@ -1863,7 +1875,7 @@ export function PurchasesPage() {
                       }
                     }}
                   >
-                    {item.image_urls?.[0] || item.image_url ? <img src={item.image_urls?.[0] || item.image_url || ""} alt="" loading="lazy" /> : <PackagePlus size={21} />}
+                    {productImageUrl(item) ? <img src={productImageUrl(item)!} alt="" loading="lazy" /> : <PackagePlus size={21} />}
                   </span>
                   <span className="sale-product-picker-copy">
                     <strong data-product-details-trigger title={item.name}>{item.name}</strong>
