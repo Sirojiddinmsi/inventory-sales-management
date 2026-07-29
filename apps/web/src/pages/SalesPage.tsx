@@ -40,6 +40,8 @@ import {
   toIsoEndOfDay,
   toIsoFromDateInput
 } from "../lib/format";
+import { productImageUrl } from "../lib/productImage";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import type {
   Contact,
   DebtStatus,
@@ -152,9 +154,6 @@ const newLine = (): SaleLine => ({
   discount: "0"
 });
 
-const productImageUrl = (product?: Product) =>
-  product?.image_urls?.[0] ?? product?.image_url ?? null;
-
 function toDateTimeLocalInputValue(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -173,6 +172,7 @@ export function SalesPage() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { tr } = useI18n();
+  const isDesktopLayout = useMediaQuery("(min-width: 901px)");
   const isAdmin = user?.role === "ADMIN";
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -243,9 +243,9 @@ export function SalesPage() {
         sortOrder: "asc"
       }
     }),
-    enabled: modalOpen || Boolean(productPickerLineKey),
-    staleTime: 0,
-    refetchOnMount: "always"
+    enabled: Boolean(productPickerLineKey) || (!isDesktopLayout && modalOpen),
+    staleTime: isDesktopLayout ? 30_000 : 0,
+    refetchOnMount: isDesktopLayout ? false : "always"
   });
   const units = useQuery({
     queryKey: ["units"],
@@ -256,7 +256,7 @@ export function SalesPage() {
     queryFn: () => api<Paginated<Contact>>("/customers", {
       params: { limit: 100, search: debouncedCustomerSearch, sortOrder: "asc" }
     }),
-    enabled: modalOpen || customerPickerOpen || newCustomerOpen
+    enabled: customerPickerOpen || newCustomerOpen || (!isDesktopLayout && modalOpen)
   });
 
   useEffect(() => setPage(1), [search, paymentFilter, from, to, archived]);
@@ -1083,6 +1083,15 @@ export function SalesPage() {
                         className={`sale-product-trigger ${line.productId ? "selected" : ""}`}
                         onClick={() => openProductPicker(line)}
                       >
+                        {line.productId ? (
+                          <span className="selected-product-thumbnail" aria-hidden="true">
+                            {lineImageUrl ? (
+                              <img src={lineImageUrl} alt="" loading="lazy" />
+                            ) : (
+                              <ShoppingCart size={18} />
+                            )}
+                          </span>
+                        ) : null}
                         <span className="sale-product-trigger-copy">
                           <strong>
                             {product?.name ?? tr("Mahsulotni tanlang", "Выберите товар")}
