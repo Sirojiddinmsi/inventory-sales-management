@@ -31,6 +31,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
+import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { api, download } from "../lib/api";
 import {
   dateTime,
@@ -214,6 +215,7 @@ export function SalesPage() {
   const [expandedMobileLineKeys, setExpandedMobileLineKeys] = useState<string[]>([]);
   const [swipedMobileLineKey, setSwipedMobileLineKey] = useState<string | null>(null);
   const [saleImagePreview, setSaleImagePreview] = useState<{ name: string; url: string } | null>(null);
+  const [detailsProduct, setDetailsProduct] = useState<Product | null>(null);
   const productSearchRef = useRef<HTMLInputElement | null>(null);
   const mobileSwipeStartX = useRef<number | null>(null);
 
@@ -1035,8 +1037,8 @@ export function SalesPage() {
                         <button
                           type="button"
                           className="sale-mobile-product-image"
-                          onClick={() => lineImageUrl ? setSaleImagePreview({ name: product.name, url: lineImageUrl }) : openProductPicker(line)}
-                          aria-label={lineImageUrl ? tr("Rasmni kattalashtirish", "Увеличить фото") : tr("Mahsulotni tanlash", "Выбрать товар")}
+                          onClick={() => product ? setDetailsProduct(product) : openProductPicker(line)}
+                          aria-label={product ? tr("Mahsulot ma'lumotlarini ochish", "Открыть карточку товара") : tr("Mahsulotni tanlash", "Выбрать товар")}
                         >
                           {lineImageUrl ? <img src={lineImageUrl} alt={product.name} loading="lazy" /> : <ShoppingCart size={21} />}
                         </button>
@@ -1417,9 +1419,28 @@ export function SalesPage() {
                     type="button"
                     className={`product-picker-item sale-product-picker-item ${isSelected ? "active" : ""}`}
                     disabled={disabled || selectingProductId !== null}
-                    onClick={() => selectedPickerLine && void chooseProduct(selectedPickerLine.key, item.id)}
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest("[data-product-details-trigger]")) {
+                        setDetailsProduct(item);
+                        return;
+                      }
+                      if (selectedPickerLine) void chooseProduct(selectedPickerLine.key, item.id);
+                    }}
                   >
-                    <span className="sale-product-picker-image">
+                    <span
+                      className="sale-product-picker-image"
+                      role="button"
+                      tabIndex={0}
+                      title={tr("Mahsulot ma'lumotlarini ochish", "Открыть карточку товара")}
+                      onClick={(event) => { event.stopPropagation(); setDetailsProduct(item); }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          setDetailsProduct(item);
+                        }
+                      }}
+                    >
                       {productImageUrl(item) ? (
                         <img src={productImageUrl(item)!} alt="" loading="lazy" />
                       ) : (
@@ -1427,7 +1448,7 @@ export function SalesPage() {
                       )}
                     </span>
                     <span className="sale-product-picker-copy">
-                      <strong title={item.name}>{item.name}</strong>
+                      <strong data-product-details-trigger title={item.name}>{item.name}</strong>
                       <small>{item.code || tr("Kodsiz", "Без кода")}</small>
                       <small>{tr("Qoldiq", "Остаток")}: {number(item.stock_quantity)} {item.unit}</small>
                     </span>
@@ -1548,6 +1569,8 @@ export function SalesPage() {
           placeholder="Sababni kiriting"
         />
       </Modal>
+
+      <ProductDetailsModal product={detailsProduct} onClose={() => setDetailsProduct(null)} />
 
       <ConfirmDialog
         open={Boolean(purgeSale)}

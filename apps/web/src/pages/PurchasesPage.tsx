@@ -31,6 +31,7 @@ import {
   Textarea
 } from "../components/ui";
 import { useI18n } from "../contexts/I18nContext";
+import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
 import type {
@@ -263,6 +264,7 @@ export function PurchasesPage() {
   const [productSearch, setProductSearch] = useState("");
   const [debouncedProductSearch, setDebouncedProductSearch] = useState("");
   const [selectedProducts, setSelectedProducts] = useState<Record<string, Product>>({});
+  const [detailsProduct, setDetailsProduct] = useState<Product | null>(null);
   const [quickProductOpen, setQuickProductOpen] = useState(false);
   const [quickProductTargetLineKey, setQuickProductTargetLineKey] = useState<string | null>(null);
   const [quickProductForm, setQuickProductForm] = useState<QuickProductForm>(newQuickProductForm);
@@ -1775,11 +1777,33 @@ export function PurchasesPage() {
                 <button
                   key={item.id}
                   type="button"
-                  className={`product-picker-item ${selectedPickerProductId === item.id ? "active" : ""}`}
-                  onClick={() => productPickerLineKey && chooseProduct(productPickerLineKey, item.id)}
+                  className={`product-picker-item sale-product-picker-item ${selectedPickerProductId === item.id ? "active" : ""}`}
+                  onClick={(event) => {
+                    if ((event.target as HTMLElement).closest("[data-product-details-trigger]")) {
+                      setDetailsProduct(item);
+                      return;
+                    }
+                    if (productPickerLineKey) chooseProduct(productPickerLineKey, item.id);
+                  }}
                 >
-                  <span>
-                    <strong>{item.name}</strong>
+                  <span
+                    className="sale-product-picker-image"
+                    role="button"
+                    tabIndex={0}
+                    title={tr("Mahsulot ma'lumotlarini ochish", "Открыть карточку товара")}
+                    onClick={(event) => { event.stopPropagation(); setDetailsProduct(item); }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setDetailsProduct(item);
+                      }
+                    }}
+                  >
+                    {item.image_urls?.[0] || item.image_url ? <img src={item.image_urls?.[0] || item.image_url || ""} alt="" loading="lazy" /> : <PackagePlus size={21} />}
+                  </span>
+                  <span className="sale-product-picker-copy">
+                    <strong data-product-details-trigger title={item.name}>{item.name}</strong>
                     <small>
                       {item.code} · {item.category_name} · {item.unit}
                       {item.location ? ` · ${item.location}` : ""}
@@ -1796,6 +1820,8 @@ export function PurchasesPage() {
           </div>
         </div>
       </Modal>
+
+      <ProductDetailsModal product={detailsProduct} onClose={() => setDetailsProduct(null)} />
 
       <Modal
         open={quickProductOpen}
