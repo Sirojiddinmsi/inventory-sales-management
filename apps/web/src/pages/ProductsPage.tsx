@@ -37,6 +37,7 @@ import {
 } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
+import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { ApiError, api, download, downloadPost } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
 import {
@@ -241,6 +242,8 @@ export function ProductsPage() {
     index: number;
   } | null>(null);
   const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
+  const [detailsProduct, setDetailsProduct] = useState<Product | null>(null);
+  const [detailsInitialSection, setDetailsInitialSection] = useState<"information" | "history">("information");
   const [historyFrom, setHistoryFrom] = useState("");
   const [historyTo, setHistoryTo] = useState("");
   const [historyType, setHistoryType] = useState<ProductMovementType | "">("");
@@ -1063,8 +1066,8 @@ export function ProductsPage() {
                           <button
                             type="button"
                             className="product-image-trigger product-image-trigger-card"
-                            onClick={() => openPreview(product)}
-                            aria-label={tr("Rasmni kattalashtirish", "Увеличить изображение")}
+                            onClick={() => { setDetailsInitialSection("information"); setDetailsProduct(product); }}
+                            aria-label={tr("Mahsulot ma'lumotlarini ochish", "Открыть карточку товара")}
                           >
                             <ProductImage
                               src={product.image_url}
@@ -1076,7 +1079,16 @@ export function ProductsPage() {
                         )
                         : <Boxes size={18} />}
                     </span>
-                    <div><strong>{product.name}</strong></div>
+                    <div>
+                      <button
+                        type="button"
+                        className="product-details-name-trigger"
+                        onClick={() => { setDetailsInitialSection("information"); setDetailsProduct(product); }}
+                        title={product.name}
+                      >
+                        {product.name}
+                      </button>
+                    </div>
                   </div>
                 </td>
                 <td data-label={tr("Kategoriya", "Категория")}>{product.category_name}</td>
@@ -1093,7 +1105,7 @@ export function ProductsPage() {
                     <div className="row-actions">
                       <button
                         className="icon-button"
-                        onClick={() => setHistoryProduct(product)}
+                        onClick={() => { setDetailsInitialSection("history"); setDetailsProduct(product); }}
                         title={tr("Harakatlar tarixi", "История движений")}
                       >
                         <History size={16} />
@@ -1533,6 +1545,16 @@ export function ProductsPage() {
           ))}
         </Select>
       </Modal>
+
+      <ProductDetailsModal
+        product={detailsProduct}
+        initialSection={detailsInitialSection}
+        onClose={() => setDetailsProduct(null)}
+        onEdit={(product) => {
+          setDetailsProduct(null);
+          openEdit(product);
+        }}
+      />
 
       <Modal
         open={Boolean(historyProduct)}
