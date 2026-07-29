@@ -256,6 +256,7 @@ export function PurchasesPage() {
   const [defaultSupplierId, setDefaultSupplierId] = useState("");
   const [defaultPurchasedAt, setDefaultPurchasedAt] = useState(new Date().toISOString().slice(0, 10));
   const [lines, setLines] = useState<PurchaseLine[]>([newPurchaseLine()]);
+  const [expandedPurchaseLineKey, setExpandedPurchaseLineKey] = useState<string | null>(null);
   const [importRows, setImportRows] = useState<ImportRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
   const [importError, setImportError] = useState("");
@@ -340,6 +341,14 @@ export function PurchasesPage() {
     const timer = window.setTimeout(() => productSearchRef.current?.focus(), 40);
     return () => window.clearTimeout(timer);
   }, [productPickerLineKey]);
+
+  useEffect(() => {
+    if (!modalOpen || !expandedPurchaseLineKey) return;
+    const timer = window.setTimeout(() => {
+      document.getElementById(`purchase-line-${expandedPurchaseLineKey}`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [expandedPurchaseLineKey, modalOpen]);
   useEffect(() => {
     if (!productPickerLineKey) {
       setDebouncedProductSearch("");
@@ -683,17 +692,29 @@ export function PurchasesPage() {
     );
   };
 
-  const addRow = () =>
-    setLines((current) => [
-      ...current,
-      newPurchaseLine({
-        supplierId: defaultSupplierId,
-        purchasedAt: defaultPurchasedAt
-      })
-    ]);
+  const addRow = () => {
+    const line = newPurchaseLine({
+      supplierId: defaultSupplierId,
+      purchasedAt: defaultPurchasedAt
+    });
+    setLines((current) => [...current, line]);
+    setExpandedPurchaseLineKey(line.key);
+  };
 
-  const removeRow = (key: string) =>
+  const removeRow = (key: string) => {
     setLines((current) => current.length === 1 ? current : current.filter((line) => line.key !== key));
+    setExpandedPurchaseLineKey((current) => current === key ? null : current);
+  };
+
+  const togglePurchaseLine = (key: string) =>
+    setExpandedPurchaseLineKey((current) => current === key ? null : key);
+
+  const adjustPurchaseQuantity = (line: PurchaseLine, direction: 1 | -1) => {
+    const current = Number(line.quantity || 0);
+    const step = Number.isInteger(current) ? 1 : 0.001;
+    const next = Math.max(0, Number((current + direction * step).toFixed(step === 1 ? 0 : 3)));
+    updateLine(line.key, "quantity", String(next));
+  };
 
   const clearQuickProductPhoto = () => {
     quickProductImageTokenRef.current = "";
@@ -781,7 +802,9 @@ export function PurchasesPage() {
     setSelectedProducts({});
     setProductPickerLineKey(null);
     setProductSearch("");
-    setLines([newPurchaseLine({ purchasedAt: initialDate })]);
+    const line = newPurchaseLine({ purchasedAt: initialDate });
+    setLines([line]);
+    setExpandedPurchaseLineKey(line.key);
     setModalOpen(true);
   };
 
@@ -793,7 +816,7 @@ export function PurchasesPage() {
     setSelectedProducts({});
     setProductPickerLineKey(null);
     setProductSearch("");
-    setLines(document.items.map((purchase) =>
+    const documentLines = document.items.map((purchase) =>
       newPurchaseLine({
         id: purchase.id,
         supplierId: purchase.supplier_id ?? "",
@@ -806,7 +829,9 @@ export function PurchasesPage() {
         purchasedAt: purchase.purchased_at.slice(0, 10),
         note: purchase.note ?? ""
       })
-    ));
+    );
+    setLines(documentLines);
+    setExpandedPurchaseLineKey(documentLines[0]?.key ?? null);
     setModalOpen(true);
   };
 
@@ -1281,12 +1306,18 @@ export function PurchasesPage() {
             )}
         onClose={() => { setModalOpen(false); setEditingDocument(null); }}
         wide
+        className="purchase-modal"
+        bodyClassName="purchase-modal-body"
+        footerClassName="purchase-modal-footer"
         footer={
           <>
             <div className="modal-total">
               <span>{tr("Hujjat jami", "Итого по документу")}</span>
               <strong>{money(total)}</strong>
             </div>
+            <Button className="purchase-mobile-add-product" variant="secondary" onClick={addRow}>
+              <Plus size={17} /> {tr("Mahsulot qo'shish", "Добавить товар")}
+            </Button>
             <Button variant="secondary" onClick={() => { setModalOpen(false); setEditingDocument(null); }}>{tr("Bekor qilish", "Отмена")}</Button>
             <Button
               loading={save.isPending}
@@ -1348,16 +1379,48 @@ export function PurchasesPage() {
           <div className="sale-section">
             <div className="section-title">
               <div><PackagePlus size={17} /><strong>{tr("Kirim qatorlari", "Строки прихода")}</strong></div>
-              <Button variant="secondary" size="sm" onClick={addRow}>
+              <Button className="purchase-desktop-add-row" variant="secondary" size="sm" onClick={addRow}>
                 <Plus size={14} /> {tr("Mahsulot qatori qo‘shish", "Добавить строку товара")}
               </Button>
             </div>
             <div className="sale-lines">
               {lines.map((line, index) => {
                 const selectedProduct = productById.get(line.productId);
+                const mobileExpanded = expandedPurchaseLineKey === line.key;
+                const imageUrl = selectedProduct?.image_urls?.[0] ?? selectedProduct?.image_url ?? null;
                 return (
-                  <div className="sale-line purchase-line" key={line.key}>
+                  <div id={`purchase-line-${line.key}`} className={`sale-line purchase-line ${mobileExpanded ? "purchase-mobile-expanded" : "purchase-mobile-collapsed"}`} key={line.key}>
                     <span className="line-number">{index + 1}</span>
+                    <div className="purchase-mobile-card-summary">
+                      <button
+                        type="button"
+                        className={`purchase-mobile-product-image ${imageUrl ? "has-image" : ""}`}
+                        onClick={() => selectedProduct ? setDetailsProduct(selectedProduct) : openProductPicker(line.key)}
+                        aria-label={selectedProduct ? tr("Mahsulot ma'lumotlarini ochish", "Открыть карточку товара") : tr("Mahsulotni tanlash", "Выбрать товар")}
+                      >
+                        {imageUrl ? <img src={imageUrl} alt={selectedProduct?.name ?? ""} loading="lazy" /> : <PackagePlus size={20} />}
+                      </button>
+                      <button
+                        type="button"
+                        className="purchase-mobile-card-main"
+                        onClick={() => line.productId ? togglePurchaseLine(line.key) : openProductPicker(line.key)}
+                      >
+                        <strong className="purchase-mobile-product-name" title={selectedProduct?.name ?? line.productName}>
+                          {selectedProduct?.name ?? line.productName ?? tr("Mahsulotni tanlang", "Выберите товар")}
+                        </strong>
+                        <small>{number(Number(line.quantity || 0))} {selectedProduct?.unit ?? ""} x {money(Number(line.purchasePrice || 0))}</small>
+                        {line.location ? <small>{tr("Joylashuv", "Место")}: {line.location}</small> : null}
+                      </button>
+                      <div className="purchase-mobile-quantity-controls" aria-label={tr("Miqdorni tez o'zgartirish", "Быстро изменить количество")}>
+                        <button type="button" onClick={() => adjustPurchaseQuantity(line, -1)} aria-label={tr("Miqdorni kamaytirish", "Уменьшить количество")}>−</button>
+                        <span>{number(Number(line.quantity || 0))}</span>
+                        <button type="button" onClick={() => adjustPurchaseQuantity(line, 1)} aria-label={tr("Miqdorni oshirish", "Увеличить количество")}>+</button>
+                      </div>
+                      <strong className="purchase-mobile-row-total">{money(lineTotal(line))}</strong>
+                      <button type="button" className="purchase-mobile-expand" onClick={() => togglePurchaseLine(line.key)} aria-label={mobileExpanded ? tr("Yig'ish", "Свернуть") : tr("Ochish", "Развернуть")}>
+                        {mobileExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                      </button>
+                    </div>
                     <div className="sale-line-product">
                       <span className="sale-mobile-label">{tr("Mahsulot", "Товар")}</span>
                       <button
