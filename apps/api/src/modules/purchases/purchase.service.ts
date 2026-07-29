@@ -93,13 +93,11 @@ export class PurchaseService {
     const contentWidth = document.page.width - document.page.margins.left - document.page.margins.right;
     const columns = [
       { title: "№", width: 24, align: "center" as const },
-      { title: "Товар", width: 200, align: "left" as const },
-      { title: "Код", width: 82, align: "left" as const },
-      { title: "Ед.", width: 42, align: "center" as const },
-      { title: "Количество", width: 64, align: "right" as const },
-      { title: "Место", width: 72, align: "left" as const },
-      { title: "Закупочная цена", width: 98, align: "right" as const },
-      { title: "Сумма", width: contentWidth - 582, align: "right" as const }
+      { title: "Товар", width: 280, align: "left" as const },
+      { title: "Ед.", width: 52, align: "center" as const },
+      { title: "Количество", width: 84, align: "right" as const },
+      { title: "Закупочная цена", width: 128, align: "right" as const },
+      { title: "Сумма", width: contentWidth - 568, align: "right" as const }
     ];
     const drawHeader = (y: number) => {
       let x = document.page.margins.left;
@@ -165,10 +163,8 @@ export class PurchaseService {
       y = drawRow([
         String(index + 1),
         item.product_name,
-        item.product_code || "—",
         item.unit,
         new Intl.NumberFormat("ru-RU").format(Number(item.quantity)),
-        item.product_location ?? "—",
         money(Number(item.purchase_price)),
         money(Number(item.total_cost))
       ], y);
