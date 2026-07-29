@@ -5,6 +5,7 @@ import { purchaseController } from "./purchase.controller.js";
 import {
   purchaseBulkCreateSchema,
   purchaseCreateSchema,
+  purchaseDocumentIdSchema,
   purchaseDocumentUpdateSchema,
   purchaseImportSchema,
   purchaseListSchema,
@@ -15,6 +16,8 @@ export const purchaseRouter = Router();
 
 purchaseRouter.get("/", validate(purchaseListSchema, "query"), asyncHandler(purchaseController.list));
 purchaseRouter.get("/import-template.xlsx", asyncHandler(purchaseController.importTemplate));
+purchaseRouter.get("/documents/:id/export.pdf", validate(purchaseDocumentIdSchema, "params"), asyncHandler(purchaseController.exportPdf));
+purchaseRouter.get("/documents/:id/export.xlsx", validate(purchaseDocumentIdSchema, "params"), asyncHandler(purchaseController.exportExcel));
 purchaseRouter.post(
   "/bulk",
   validate(purchaseBulkCreateSchema),

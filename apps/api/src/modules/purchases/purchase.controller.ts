@@ -44,6 +44,25 @@ export class PurchaseController {
       .setHeader("Content-Disposition", 'attachment; filename="kirim-import-shablon.xlsx"')
       .send(buffer);
   }
+
+  async exportPdf(req: Request, res: Response) {
+    const file = await purchaseService.exportPdf(String(req.params.id));
+    res
+      .setHeader("Content-Type", "application/pdf")
+      .setHeader("Content-Disposition", `attachment; filename="${file.filename}"`)
+      .send(file.buffer);
+  }
+
+  async exportExcel(req: Request, res: Response) {
+    const file = await purchaseService.exportExcel(String(req.params.id));
+    res
+      .setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      )
+      .setHeader("Content-Disposition", `attachment; filename="${file.filename}"`)
+      .send(file.buffer);
+  }
 }
 
 export const purchaseController = new PurchaseController();
