@@ -1596,11 +1596,11 @@ export function ProductsPage() {
           setDetailsProduct(null);
           openEdit(product);
         }}
-        onUndoCostCorrection={
-          user?.role === "ADMIN"
-            ? (productId, correctionId) =>
-                undoFifoCostCorrection.mutate({ productId, correctionId })
-            : undefined
+        // The API remains the authorization boundary. Keeping this action wired
+        // avoids hiding it because a stale client-side session has not refreshed
+        // its role yet; unauthorized requests are still rejected by the server.
+        onUndoCostCorrection={(productId, correctionId) =>
+          undoFifoCostCorrection.mutate({ productId, correctionId })
         }
         undoingCostCorrectionId={
           undoFifoCostCorrection.isPending
