@@ -21,8 +21,10 @@ RUN apk add --no-cache fontconfig ttf-dejavu \
   && npm cache clean --force
 
 COPY --from=build /app/apps/api/dist apps/api/dist
+COPY scripts/bootstrap-db.mjs scripts/bootstrap-db.mjs
+COPY database database
 RUN mkdir -p /app/uploads/products && chown -R node:node /app/uploads
 
 USER node
 EXPOSE 4000
-CMD ["node", "apps/api/dist/server.js"]
+CMD ["sh", "-c", "node scripts/bootstrap-db.mjs && exec node apps/api/dist/server.js"]
