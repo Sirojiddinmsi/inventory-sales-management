@@ -60,6 +60,10 @@ export class ProductService {
     return correction;
   }
 
+  async undoFifoCostCorrection(productId: string, correctionId: string, userId: string) {
+    return productRepository.undoFifoCostCorrection(productId, correctionId, userId);
+  }
+
   async delete(id: string) {
     const product = await productRepository.permanentDelete(id);
     if (!product) throw new AppError(404, "Product not found", "PRODUCT_NOT_FOUND");

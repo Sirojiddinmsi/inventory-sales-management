@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fifoCostCorrectionSchema,
+  fifoCostCorrectionUndoParamsSchema,
   productCreateSchema,
   productImportSchema,
   productUpdateSchema
@@ -77,6 +78,15 @@ describe("product schemas", () => {
     expect(
       fifoCostCorrectionSchema.safeParse({ correctedUnitCost: -1 }).success
     ).toBe(false);
+  });
+
+  it("accepts product and correction identifiers for a FIFO correction undo", () => {
+    expect(
+      fifoCostCorrectionUndoParamsSchema.safeParse({
+        id: "ce61865c-0f1b-4f88-b8d2-7320575c1171",
+        correctionId: "c650a1bd-0f1b-4f88-b8d2-7320575c1171"
+      }).success
+    ).toBe(true);
   });
 
   it("allows product update to request an atomic remaining FIFO correction", () => {

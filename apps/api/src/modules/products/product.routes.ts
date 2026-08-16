@@ -12,6 +12,7 @@ import {
   productExportSelectedSchema,
   productInventoryExportSchema,
   fifoCostCorrectionSchema,
+  fifoCostCorrectionUndoParamsSchema,
   productImportSchema,
   productHistorySchema,
   productListSchema,
@@ -79,6 +80,12 @@ productRouter.post(
   validate(idParamSchema, "params"),
   validate(fifoCostCorrectionSchema),
   asyncHandler(productController.correctFifoCost)
+);
+productRouter.post(
+  "/:id/fifo-cost-corrections/:correctionId/undo",
+  authorize("ADMIN"),
+  validate(fifoCostCorrectionUndoParamsSchema, "params"),
+  asyncHandler(productController.undoFifoCostCorrection)
 );
 productRouter.patch(
   "/:id",

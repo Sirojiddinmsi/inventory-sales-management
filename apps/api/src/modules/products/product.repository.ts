@@ -32,6 +32,61 @@ type ProductInput = {
   description?: string | null;
 };
 
+type CostCorrectionBatchChange = {
+  originalBatchId: string;
+  replacementBatchId: string;
+  quantity: number;
+  oldUnitCost: number;
+  newUnitCost: number;
+};
+
+const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+function readCorrectionBatchChanges(value: unknown): CostCorrectionBatchChange[] {
+  const parsed = typeof value === "string" ? JSON.parse(value) : value;
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new AppError(
+      409,
+      "FIFO cost correction does not contain reversible batch changes",
+      "FIFO_CORRECTION_UNDO_INVALID"
+    );
+  }
+
+  const batchIds = new Set<string>();
+  return parsed.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    const change: CostCorrectionBatchChange = {
+      originalBatchId: String(row.originalBatchId ?? ""),
+      replacementBatchId: String(row.replacementBatchId ?? ""),
+      quantity: Number(row.quantity),
+      oldUnitCost: Number(row.oldUnitCost),
+      newUnitCost: Number(row.newUnitCost)
+    };
+    if (
+      !change.originalBatchId ||
+      !change.replacementBatchId ||
+      change.originalBatchId === change.replacementBatchId ||
+      !Number.isFinite(change.quantity) ||
+      change.quantity <= 0 ||
+      !Number.isFinite(change.oldUnitCost) ||
+      change.oldUnitCost < 0 ||
+      !Number.isFinite(change.newUnitCost) ||
+      change.newUnitCost < 0 ||
+      batchIds.has(change.originalBatchId) ||
+      batchIds.has(change.replacementBatchId)
+    ) {
+      throw new AppError(
+        409,
+        "FIFO cost correction contains invalid batch changes",
+        "FIFO_CORRECTION_UNDO_INVALID"
+      );
+    }
+    batchIds.add(change.originalBatchId);
+    batchIds.add(change.replacementBatchId);
+    return change;
+  });
+}
+
 const productColumns = `
   p.id, p.code, p.name, p.category_id, c.name AS category_name,
   p.brand, p.unit, p.purchase_price, p.sale_price, p.stock_quantity,
@@ -189,6 +244,290 @@ export class ProductRepository {
         product_name: product.name,
         default_purchase_price: Number(product.purchase_price)
       };
+  }
+
+  async undoFifoCostCorrection(productId: string, correctionId: string, undoneBy: string) {
+    return withTransaction(async (client) => {
+      const correctionResult = await client.query<{
+        id: string;
+        product_id: string;
+        batch_changes: unknown;
+      }>(
+        `SELECT id, product_id, batch_changes
+         FROM fifo_cost_corrections
+         WHERE id = $1 AND product_id = $2
+         FOR UPDATE`,
+        [correctionId, productId]
+      );
+      const correction = correctionResult.rows[0];
+      if (!correction) {
+        throw new AppError(404, "FIFO cost correction not found", "FIFO_CORRECTION_NOT_FOUND");
+      }
+
+      const alreadyUndone = await client.query(
+        `SELECT 1
+         FROM fifo_cost_correction_undos
+         WHERE correction_id = $1
+         FOR KEY SHARE`,
+        [correctionId]
+      );
+      if (alreadyUndone.rows[0]) {
+        throw new AppError(409, "FIFO cost correction was already undone", "FIFO_CORRECTION_ALREADY_UNDONE");
+      }
+
+      const batchChanges = readCorrectionBatchChanges(correction.batch_changes);
+      const affectedSaleItemIds = new Set<string>();
+      const affectedSaleIds = new Set<string>();
+      let restoredQuantity = 0;
+
+      for (const change of batchChanges) {
+        const originalResult = await client.query<{
+          id: string;
+          product_id: string;
+          remaining_quantity: number;
+          purchase_price: number;
+        }>(
+          `SELECT id, product_id, remaining_quantity, purchase_price
+           FROM inventory_batches
+           WHERE id = $1
+           FOR UPDATE`,
+          [change.originalBatchId]
+        );
+        const replacementResult = await client.query<{
+          id: string;
+          product_id: string;
+          remaining_quantity: number;
+          purchase_price: number;
+          source: string;
+          source_reference_id: string | null;
+        }>(
+          `SELECT id, product_id, remaining_quantity, purchase_price, source, source_reference_id
+           FROM inventory_batches
+           WHERE id = $1
+           FOR UPDATE`,
+          [change.replacementBatchId]
+        );
+        const original = originalResult.rows[0];
+        const replacement = replacementResult.rows[0];
+        if (
+          !original ||
+          !replacement ||
+          original.product_id !== productId ||
+          replacement.product_id !== productId ||
+          replacement.source !== "COST_CORRECTION" ||
+          replacement.source_reference_id !== original.id ||
+          Math.abs(Number(original.purchase_price) - change.oldUnitCost) > 0.01 ||
+          Math.abs(Number(replacement.purchase_price) - change.newUnitCost) > 0.01
+        ) {
+          throw new AppError(
+            409,
+            "FIFO correction batches no longer match the recorded correction",
+            "FIFO_CORRECTION_UNDO_BATCH_CHANGED"
+          );
+        }
+        if (Math.abs(Number(original.remaining_quantity)) > 0.0001) {
+          throw new AppError(
+            409,
+            "FIFO correction cannot be undone because the original batch has changed",
+            "FIFO_CORRECTION_UNDO_BATCH_CHANGED"
+          );
+        }
+
+        const dependentCorrection = await client.query(
+          `SELECT 1
+           FROM inventory_batches
+           WHERE source = 'COST_CORRECTION' AND source_reference_id = $1
+           LIMIT 1`,
+          [replacement.id]
+        );
+        if (dependentCorrection.rows[0]) {
+          throw new AppError(
+            409,
+            "Undo the newer FIFO cost correction first",
+            "FIFO_CORRECTION_UNDO_DEPENDENT_CORRECTION"
+          );
+        }
+
+        const supplierReturnUse = await client.query(
+          `SELECT 1
+           FROM supplier_return_batch_allocations allocation
+           JOIN supplier_returns supplier_return ON supplier_return.id = allocation.supplier_return_id
+           WHERE allocation.batch_id = $1 AND supplier_return.deleted_at IS NULL
+           LIMIT 1`,
+          [replacement.id]
+        );
+        if (supplierReturnUse.rows[0]) {
+          throw new AppError(
+            409,
+            "FIFO correction cannot be undone after a supplier return used this batch",
+            "FIFO_CORRECTION_UNDO_SUPPLIER_RETURN"
+          );
+        }
+
+        const allocationsResult = await client.query<{
+          id: string;
+          sale_item_id: string;
+          sale_id: string;
+          quantity: number;
+          returned_quantity: number;
+          archived_released_quantity: number;
+          archived_at: string | null;
+        }>(
+          `SELECT allocation.id, allocation.sale_item_id, item.sale_id,
+                  allocation.quantity, allocation.returned_quantity,
+                  allocation.archived_released_quantity, sale.archived_at
+           FROM sale_item_batch_allocations allocation
+           JOIN sale_items item ON item.id = allocation.sale_item_id
+           JOIN sales sale ON sale.id = item.sale_id
+           WHERE allocation.batch_id = $1
+           FOR UPDATE OF allocation, item, sale`,
+          [replacement.id]
+        );
+
+        for (const allocation of allocationsResult.rows) {
+          if (
+            Number(allocation.returned_quantity) > 0 ||
+            Number(allocation.archived_released_quantity) > 0 ||
+            allocation.archived_at
+          ) {
+            throw new AppError(
+              409,
+              "FIFO correction cannot be undone after the affected sale was returned or archived",
+              "FIFO_CORRECTION_UNDO_SALE_CHANGED"
+            );
+          }
+
+          const existingOriginal = await client.query<{
+            returned_quantity: number;
+            archived_released_quantity: number;
+          }>(
+            `SELECT returned_quantity, archived_released_quantity
+             FROM sale_item_batch_allocations
+             WHERE sale_item_id = $1 AND batch_id = $2
+             FOR UPDATE`,
+            [allocation.sale_item_id, original.id]
+          );
+          const existing = existingOriginal.rows[0];
+          if (
+            existing &&
+            (Number(existing.returned_quantity) > 0 || Number(existing.archived_released_quantity) > 0)
+          ) {
+            throw new AppError(
+              409,
+              "FIFO correction cannot be undone because an original sale allocation was changed",
+              "FIFO_CORRECTION_UNDO_SALE_CHANGED"
+            );
+          }
+
+          const quantity = Number(allocation.quantity);
+          const costAmount = money(quantity * change.oldUnitCost);
+          await client.query(
+            `INSERT INTO sale_item_batch_allocations (
+               sale_item_id, batch_id, quantity, unit_cost, cost_amount
+             ) VALUES ($1,$2,$3,$4,$5)
+             ON CONFLICT (sale_item_id, batch_id) DO UPDATE SET
+               quantity = sale_item_batch_allocations.quantity + EXCLUDED.quantity,
+               unit_cost = EXCLUDED.unit_cost,
+               cost_amount = sale_item_batch_allocations.cost_amount + EXCLUDED.cost_amount`,
+            [allocation.sale_item_id, original.id, quantity, change.oldUnitCost, costAmount]
+          );
+          await client.query("DELETE FROM sale_item_batch_allocations WHERE id = $1", [allocation.id]);
+          affectedSaleItemIds.add(allocation.sale_item_id);
+          affectedSaleIds.add(allocation.sale_id);
+        }
+
+        const restored = await client.query(
+          `UPDATE inventory_batches
+           SET remaining_quantity = $2
+           WHERE id = $1 AND $2 <= initial_quantity
+           RETURNING id`,
+          [original.id, replacement.remaining_quantity]
+        );
+        if (!restored.rows[0]) {
+          throw new AppError(
+            409,
+            "FIFO correction batch cannot be restored safely",
+            "FIFO_CORRECTION_UNDO_BATCH_CHANGED"
+          );
+        }
+        await client.query("DELETE FROM inventory_batches WHERE id = $1", [replacement.id]);
+        restoredQuantity += Number(replacement.remaining_quantity);
+      }
+
+      for (const saleItemId of affectedSaleItemIds) {
+        const itemResult = await client.query<{
+          sale_id: string;
+          quantity: number;
+          total_amount: number;
+          subtotal: number;
+          discount: number;
+        }>(
+          `SELECT item.sale_id, item.quantity, item.total_amount, sale.subtotal, sale.discount
+           FROM sale_items item
+           JOIN sales sale ON sale.id = item.sale_id
+           WHERE item.id = $1
+           FOR UPDATE OF item, sale`,
+          [saleItemId]
+        );
+        const item = itemResult.rows[0];
+        if (!item) {
+          throw new AppError(409, "Affected sale item no longer exists", "FIFO_CORRECTION_UNDO_SALE_CHANGED");
+        }
+        const costResult = await client.query<{ fifo_cost: number }>(
+          `SELECT COALESCE(SUM(cost_amount), 0) AS fifo_cost
+           FROM sale_item_batch_allocations
+           WHERE sale_item_id = $1`,
+          [saleItemId]
+        );
+        const fifoCost = money(Number(costResult.rows[0]?.fifo_cost ?? 0));
+        const saleDiscountShare = Number(item.subtotal) > 0
+          ? money(Number(item.discount) * (Number(item.total_amount) / Number(item.subtotal)))
+          : 0;
+        await client.query(
+          `UPDATE sale_items
+           SET fifo_cost = $2,
+               purchase_price = CASE WHEN quantity > 0 THEN $2 / quantity ELSE 0 END,
+               profit = total_amount - $2 - $3
+           WHERE id = $1`,
+          [saleItemId, fifoCost, saleDiscountShare]
+        );
+      }
+
+      for (const saleId of affectedSaleIds) {
+        const totalResult = await client.query<{ fifo_cost: number }>(
+          `SELECT COALESCE(SUM(fifo_cost), 0) AS fifo_cost
+           FROM sale_items
+           WHERE sale_id = $1`,
+          [saleId]
+        );
+        const fifoCost = money(Number(totalResult.rows[0]?.fifo_cost ?? 0));
+        await client.query(
+          "UPDATE sales SET fifo_cost = $2, profit = total_amount - $2 WHERE id = $1",
+          [saleId, fifoCost]
+        );
+      }
+
+      await client.query(
+        `INSERT INTO fifo_cost_correction_undos (correction_id, undone_by, summary)
+         VALUES ($1,$2,$3::jsonb)`,
+        [
+          correctionId,
+          undoneBy,
+          JSON.stringify({
+            restoredQuantity: money(restoredQuantity),
+            movedSaleAllocations: affectedSaleItemIds.size,
+            updatedSales: affectedSaleIds.size
+          })
+        ]
+      );
+
+      return {
+        correctionId,
+        restoredQuantity: money(restoredQuantity),
+        updatedSaleItems: affectedSaleItemIds.size,
+        updatedSales: affectedSaleIds.size
+      };
+    });
   }
 
   async list(input: {
@@ -374,7 +713,10 @@ export class ProductRepository {
     const supplierReturnValues: unknown[] = [id];
     const supplierReturnConditions = ["spr.product_id = $1", "spr.deleted_at IS NULL"];
     const correctionValues: unknown[] = [id];
-    const correctionConditions = ["fcc.product_id = $1"];
+    const correctionConditions = [
+      "fcc.product_id = $1",
+      "NOT EXISTS (SELECT 1 FROM fifo_cost_correction_undos undo WHERE undo.correction_id = fcc.id)"
+    ];
 
     if (filter.from) {
       batchValues.push(filter.from);

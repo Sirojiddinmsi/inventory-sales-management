@@ -922,6 +922,10 @@ td strong { color: #1e293b; font-size: 12px; }
 .product-details-note { color: #94a3b8 !important; }
 .product-details-movement-value { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
 .product-details-movement-value strong { color: #1e293b; font-size: 12px; white-space: nowrap; }
+.product-details-movement-actions { grid-column: 2 / -1; justify-self: end; }
+.product-details-movement-actions .button { min-height: 28px; padding: 4px 7px; font-size: 10px; white-space: nowrap; }
+.product-details-undo-warning { align-items: flex-start; }
+.product-details-undo-warning p { margin: 0; line-height: 1.55; }
 .product-details-preview-modal { width: min(760px, 96vw); }
 .product-details-preview-body { padding: 18px; }
 .product-details-preview-frame { height: min(68dvh, 640px); min-height: 280px; max-height: calc(100dvh - 180px); box-sizing: border-box; padding: 14px; display: flex; align-items: center; justify-content: center; overflow: auto; border-radius: 12px; background: #f8fafc; }

@@ -72,6 +72,11 @@ export const fifoCostCorrectionSchema = z.object({
   note: z.string().trim().max(2000).nullish()
 });
 
+export const fifoCostCorrectionUndoParamsSchema = z.object({
+  id: z.uuid(),
+  correctionId: z.uuid()
+});
+
 const productIds = z
   .array(z.uuid())
   .min(1)

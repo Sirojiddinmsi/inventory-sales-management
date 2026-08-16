@@ -120,6 +120,13 @@ type FifoCostCorrectionResult = {
   new_total_cost: number;
 };
 
+type FifoCostCorrectionUndoResult = {
+  correctionId: string;
+  restoredQuantity: number;
+  updatedSaleItems: number;
+  updatedSales: number;
+};
+
 const PRODUCT_PAGE_SIZE_KEY = "products.pageSize";
 const productPageSizeOptions = [15, 25, 50, 100] as const;
 
@@ -443,6 +450,41 @@ export function ProductsPage() {
             )
           : error.message
       );
+    }
+  });
+
+  const undoFifoCostCorrection = useMutation({
+    mutationFn: ({ productId, correctionId }: { productId: string; correctionId: string }) =>
+      api<FifoCostCorrectionUndoResult>(
+        `/products/${productId}/fifo-cost-corrections/${correctionId}/undo`,
+        { method: "POST" }
+      ),
+    onSuccess: async (result) => {
+      toast.success(
+        tr(
+          `${result.updatedSales} ta sotuvning FIFO tannarxi tiklandi`,
+          `FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0430 \u0434\u043b\u044f ${result.updatedSales} \u043f\u0440\u043e\u0434\u0430\u0436`
+        )
+      );
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["products"] }),
+        queryClient.invalidateQueries({ queryKey: ["product-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["product-details-history"] }),
+        queryClient.invalidateQueries({ queryKey: ["sales"] }),
+        queryClient.invalidateQueries({ queryKey: ["reports"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] })
+      ]);
+    },
+    onError: (error) => {
+      const code = error instanceof ApiError ? error.code : undefined;
+      const message = code === "FIFO_CORRECTION_UNDO_DEPENDENT_CORRECTION"
+        ? tr("Avval keyingi FIFO tannarx tuzatishini bekor qiling", "\u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043e\u0442\u043c\u0435\u043d\u0438\u0442\u0435 \u0431\u043e\u043b\u0435\u0435 \u043d\u043e\u0432\u0443\u044e \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u0438\u0440\u043e\u0432\u043a\u0443 FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u0438")
+        : code === "FIFO_CORRECTION_UNDO_SALE_CHANGED"
+          ? tr("Bu tuzatishga bog'langan sotuv qaytarilgan yoki arxivlangan. Uni xavfsiz avtomatik bekor qilib bo'lmaydi.", "\u0421\u0432\u044f\u0437\u0430\u043d\u043d\u0430\u044f \u0441 \u044d\u0442\u043e\u0439 \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u0438\u0440\u043e\u0432\u043a\u043e\u0439 \u043f\u0440\u043e\u0434\u0430\u0436\u0430 \u0431\u044b\u043b\u0430 \u0432\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d\u0430 \u0438\u043b\u0438 \u0430\u0440\u0445\u0438\u0432\u0438\u0440\u043e\u0432\u0430\u043d\u0430. \u0411\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e \u043e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u0435\u0451 \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u043d\u0435\u043b\u044c\u0437\u044f.")
+          : code === "FIFO_CORRECTION_UNDO_SUPPLIER_RETURN"
+            ? tr("Bu FIFO batchdan yetkazib beruvchiga qaytarish qilingan. Avval o'sha qaytarishni bekor qiling.", "\u0418\u0437 \u044d\u0442\u043e\u0439 FIFO-\u043f\u0430\u0440\u0442\u0438\u0438 \u043e\u0444\u043e\u0440\u043c\u043b\u0435\u043d \u0432\u043e\u0437\u0432\u0440\u0430\u0442 \u043f\u043e\u0441\u0442\u0430\u0432\u0449\u0438\u043a\u0443. \u0421\u043d\u0430\u0447\u0430\u043b\u0430 \u043e\u0442\u043c\u0435\u043d\u0438\u0442\u0435 \u0435\u0433\u043e.")
+            : error.message;
+      toast.error(message);
     }
   });
 
@@ -1554,6 +1596,17 @@ export function ProductsPage() {
           setDetailsProduct(null);
           openEdit(product);
         }}
+        onUndoCostCorrection={
+          user?.role === "ADMIN"
+            ? (productId, correctionId) =>
+                undoFifoCostCorrection.mutate({ productId, correctionId })
+            : undefined
+        }
+        undoingCostCorrectionId={
+          undoFifoCostCorrection.isPending
+            ? undoFifoCostCorrection.variables?.correctionId ?? null
+            : null
+        }
       />
 
       <Modal

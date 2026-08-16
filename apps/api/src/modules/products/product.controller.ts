@@ -53,6 +53,16 @@ export class ProductController {
     );
   }
 
+  async undoFifoCostCorrection(req: Request, res: Response) {
+    res.json(
+      await productService.undoFifoCostCorrection(
+        String(req.params.id),
+        String(req.params.correctionId),
+        req.user!.id
+      )
+    );
+  }
+
   async delete(req: Request, res: Response) {
     await productService.delete(String(req.params.id));
     res.status(204).send();

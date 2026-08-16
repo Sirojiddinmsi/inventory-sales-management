@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Boxes, History, ImageOff, MapPin, Package, RefreshCw, Tag, X } from "lucide-react";
+import { AlertTriangle, Boxes, History, ImageOff, MapPin, Package, RefreshCw, Tag, Undo2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button, Modal } from "./ui";
 import { useI18n } from "../contexts/I18nContext";
@@ -14,6 +14,8 @@ type ProductDetailsModalProps = {
   onClose: () => void;
   onEdit?: (product: Product) => void;
   initialSection?: Section;
+  onUndoCostCorrection?: (productId: string, correctionId: string) => void;
+  undoingCostCorrectionId?: string | null;
 };
 
 const historyTypes: Array<{ value: ProductMovementType | ""; uz: string; ru: string }> = [
@@ -41,13 +43,21 @@ function isOutgoingMovement(type: ProductMovementType) {
   return type === "sale" || type === "supplier_return";
 }
 
-export function ProductDetailsModal({ product, onClose, onEdit, initialSection = "information" }: ProductDetailsModalProps) {
+export function ProductDetailsModal({
+  product,
+  onClose,
+  onEdit,
+  initialSection = "information",
+  onUndoCostCorrection,
+  undoingCostCorrectionId
+}: ProductDetailsModalProps) {
   const { tr } = useI18n();
   const [section, setSection] = useState<Section>(initialSection);
   const [movementType, setMovementType] = useState<ProductMovementType | "">("");
   const [selectedImage, setSelectedImage] = useState(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [correctionToUndo, setCorrectionToUndo] = useState<string | null>(null);
   const images = useMemo(() => product ? imageUrls(product) : [], [product]);
 
   useEffect(() => {
@@ -57,6 +67,7 @@ export function ProductDetailsModal({ product, onClose, onEdit, initialSection =
     setSelectedImage(0);
     setPreviewOpen(false);
     setImageFailed(false);
+    setCorrectionToUndo(null);
   }, [product?.id, initialSection]);
 
   const history = useQuery({
@@ -182,11 +193,59 @@ export function ProductDetailsModal({ product, onClose, onEdit, initialSection =
                   <div className="product-details-movement-icon">{isOutgoingMovement(movement.movement_type) ? "−" : "+"}</div>
                   <div className="product-details-movement-copy"><strong>{movementLabel(movement.movement_type, tr)}</strong><small>{dateTime(movement.movement_at)}{movement.reference_number ? ` · ${movement.reference_number}` : ""}</small>{movement.note ? <small className="product-details-note">{movement.note}</small> : null}</div>
                   <div className="product-details-movement-value"><strong>{isOutgoingMovement(movement.movement_type) ? "−" : "+"}{number(movement.quantity)} {product.unit}</strong>{movement.sale_price !== undefined ? <small>{money(movement.sale_price)}</small> : movement.purchase_price !== undefined ? <small>{money(movement.purchase_price)}</small> : null}</div>
+                  {movement.movement_type === "cost_correction" && onUndoCostCorrection ? (
+                    <div className="product-details-movement-actions">
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={undoingCostCorrectionId === movement.reference_number}
+                        onClick={() => setCorrectionToUndo(movement.reference_number)}
+                      >
+                        <Undo2 size={14} /> {tr("Bekor qilish", "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c")}
+                      </Button>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div> : null}
           </section>
         )}
+      </Modal>
+
+      <Modal
+        open={Boolean(correctionToUndo)}
+        title={tr(
+          "FIFO tannarx tuzatishini bekor qilish",
+          "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u0438\u0440\u043e\u0432\u043a\u0443 FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u0438"
+        )}
+        onClose={() => setCorrectionToUndo(null)}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setCorrectionToUndo(null)}>
+              {tr("Bekor qilish", "\u041e\u0442\u043c\u0435\u043d\u0430")}
+            </Button>
+            <Button
+              variant="danger"
+              loading={undoingCostCorrectionId === correctionToUndo}
+              onClick={() => {
+                if (correctionToUndo) onUndoCostCorrection?.(product.id, correctionToUndo);
+                setCorrectionToUndo(null);
+              }}
+            >
+              <Undo2 size={16} /> {tr("Tuzatishni bekor qilish", "\u041e\u0442\u043c\u0435\u043d\u0438\u0442\u044c \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u0438\u0440\u043e\u0432\u043a\u0443")}
+            </Button>
+          </>
+        }
+      >
+        <div className="warning-box product-details-undo-warning">
+          <AlertTriangle size={20} />
+          <p>
+            {tr(
+              "Bu amal shu tuzatishning FIFO batchlari va bog'langan sotuv tannarxini avvalgi holatiga qaytaradi. Sotuv foydasi va hisobotlar qayta hisoblanadi. Qaytarilgan, arxivlangan yoki keyingi tuzatish bilan bog'langan sotuvlar bo'lsa tizim operatsiyani xavfsizlik uchun rad etadi.",
+              "\u042d\u0442\u043e \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435 \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442 FIFO-\u043f\u0430\u0440\u0442\u0438\u0438 \u0438 \u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c \u0441\u0432\u044f\u0437\u0430\u043d\u043d\u044b\u0445 \u0441 \u044d\u0442\u043e\u0439 \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u0438\u0440\u043e\u0432\u043a\u043e\u0439 \u043f\u0440\u043e\u0434\u0430\u0436. \u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0438 \u043e\u0442\u0447\u0451\u0442\u044b \u0431\u0443\u0434\u0443\u0442 \u043f\u0435\u0440\u0435\u0441\u0447\u0438\u0442\u0430\u043d\u044b. \u0415\u0441\u043b\u0438 \u0435\u0441\u0442\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442, \u0430\u0440\u0445\u0438\u0432 \u0438\u043b\u0438 \u0431\u043e\u043b\u0435\u0435 \u043d\u043e\u0432\u0430\u044f \u043a\u043e\u0440\u0440\u0435\u043a\u0442\u0438\u0440\u043e\u0432\u043a\u0430, \u0441\u0438\u0441\u0442\u0435\u043c\u0430 \u0431\u0435\u0437\u043e\u043f\u0430\u0441\u043d\u043e \u043e\u0442\u043a\u043b\u043e\u043d\u0438\u0442 \u043e\u043f\u0435\u0440\u0430\u0446\u0438\u044e."
+            )}
+          </p>
+        </div>
       </Modal>
 
       <Modal open={previewOpen} title={product.name} onClose={() => setPreviewOpen(false)} className="product-details-preview-modal" bodyClassName="product-details-preview-body">
