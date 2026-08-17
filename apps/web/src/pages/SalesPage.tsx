@@ -32,6 +32,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useI18n } from "../contexts/I18nContext";
 import { ProductDetailsModal } from "../components/ProductDetailsModal";
+import { SaleDetailsModal } from "../components/SaleDetailsModal";
 import { api, download } from "../lib/api";
 import {
   dateTime,
@@ -199,6 +200,7 @@ export function SalesPage() {
   const [saleDiscount, setSaleDiscount] = useState("0");
   const [dueDate, setDueDate] = useState("");
   const [note, setNote] = useState("");
+  const [detailsSale, setDetailsSale] = useState<Sale | null>(null);
   const [returnSale, setReturnSale] = useState<SaleDetails | null>(null);
   const [returnQuantities, setReturnQuantities] = useState<Record<string, string>>({});
   const [returnReason, setReturnReason] = useState("");
@@ -861,7 +863,15 @@ export function SalesPage() {
                   <div className="product-cell">
                     <span className="product-avatar"><ReceiptText size={17} /></span>
                     <div>
-                      <strong>{sale.invoice_number}</strong>
+                      <button
+                        type="button"
+                        className="invoice-details-trigger"
+                        onClick={() => setDetailsSale(sale)}
+                        title={sale.invoice_number}
+                        aria-label={tr("Nakladnoy ma'lumotlarini ochish", "Открыть детали накладной")}
+                      >
+                        {sale.invoice_number}
+                      </button>
                       {sale.returned_amount > 0 && <small>Qaytarish: {money(sale.returned_amount)}</small>}
                       {sale.note && (
                         <small className="invoice-note-preview" title={sale.note}>
@@ -942,6 +952,20 @@ export function SalesPage() {
           />
         )}
       </Card>
+
+      <SaleDetailsModal
+        sale={detailsSale}
+        onClose={() => setDetailsSale(null)}
+        onDownload={(sale) => void receipt(sale)}
+        onEdit={(sale) => {
+          setDetailsSale(null);
+          void openEdit(sale);
+        }}
+        onReturn={(sale) => {
+          setDetailsSale(null);
+          void openReturn(sale);
+        }}
+      />
 
       <Modal
         open={modalOpen}
