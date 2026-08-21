@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Download,
   Edit3,
+  Eye,
   FileSpreadsheet,
   ImagePlus,
   PackagePlus,
@@ -32,6 +33,7 @@ import {
   Textarea
 } from "../components/ui";
 import { useI18n } from "../contexts/I18nContext";
+import { PurchaseDetailsModal } from "../components/PurchaseDetailsModal";
 import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
@@ -237,7 +239,7 @@ export function PurchasesPage() {
   const { tr } = useI18n();
   const isDesktopLayout = useMediaQuery("(min-width: 901px)");
   const [page, setPage] = useState(1);
-  const [expandedDocumentIds, setExpandedDocumentIds] = useState<string[]>([]);
+  const [selectedPurchaseDocument, setSelectedPurchaseDocument] = useState<PurchaseDocument | null>(null);
   const [returnPage, setReturnPage] = useState(1);
   const [activeView, setActiveView] = useState<"purchases" | "returns">("purchases");
   const [search, setSearch] = useState("");
@@ -344,7 +346,7 @@ export function PurchasesPage() {
   useEffect(() => {
     setPage(1);
     setReturnPage(1);
-    setExpandedDocumentIds([]);
+    setSelectedPurchaseDocument(null);
   }, [search, from, to]);
   useEffect(() => {
     if (!productPickerLineKey) return;
@@ -1094,12 +1096,10 @@ export function PurchasesPage() {
           </thead>
           <tbody>
             {purchases.data?.data.map((document) => {
-              const expanded = expandedDocumentIds.includes(document.id);
               const exportingPdf = exportingDocument?.id === document.id && exportingDocument.format === "pdf";
               const exportingExcel = exportingDocument?.id === document.id && exportingDocument.format === "xlsx";
               return (
-                <Fragment key={document.id}>
-                  <tr className={expanded ? "purchase-document-row expanded" : "purchase-document-row"}>
+                <tr className="purchase-document-row" key={document.id}>
                     <td data-label={tr("Kirim hujjati", "Документ прихода")}>
                       <div className="purchase-document-number">
                         <span className="product-avatar"><PackagePlus size={17} /></span>
@@ -1157,86 +1157,15 @@ export function PurchasesPage() {
                         <button
                           type="button"
                           className="icon-button purchase-document-toggle"
-                          onClick={() => setExpandedDocumentIds((current) =>
-                            current.includes(document.id)
-                              ? current.filter((id) => id !== document.id)
-                              : [...current, document.id]
-                          )}
-                          title={expanded
-                            ? tr("Mahsulotlarni yopish", "Скрыть товары")
-                            : tr("Mahsulotlarni ko‘rsatish", "Показать товары")}
-                          aria-expanded={expanded}
+                          onClick={() => setSelectedPurchaseDocument(document)}
+                          title={tr("Tafsilotlarni ko'rish", "Посмотреть детали")}
+                          aria-label={tr("Kirim tafsilotlarini ko'rish", "Посмотреть детали прихода")}
                         >
-                          {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                          <Eye size={17} />
                         </button>
                       </div>
                     </td>
                   </tr>
-                  {expanded ? (
-                    <tr className="purchase-document-detail-row">
-                      <td colSpan={8} className="purchase-document-detail-cell">
-                        <div className="purchase-document-export-actions">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            loading={exportingPdf}
-                            disabled={Boolean(exportingDocument) && !exportingPdf}
-                            onClick={() => void exportPurchaseDocument(document, "pdf")}
-                          >
-                            <Download size={15} /> {tr("PDF yuklab olish", "Скачать PDF")}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            loading={exportingExcel}
-                            disabled={Boolean(exportingDocument) && !exportingExcel}
-                            onClick={() => void exportPurchaseDocument(document, "xlsx")}
-                          >
-                            <FileSpreadsheet size={15} /> {tr("Excel yuklab olish", "Скачать Excel")}
-                          </Button>
-                        </div>
-                        <div className="purchase-document-items">
-                          <div className="purchase-document-item purchase-document-item-head">
-                            <span>{tr("Mahsulot", "Товар")}</span>
-                            <span>{tr("Joylashuv", "Место")}</span>
-                            <span>{tr("Miqdor", "Количество")}</span>
-                            <span>{tr("Kirim narxi", "Закупочная цена")}</span>
-                            <span>{tr("Qator jami", "Сумма строки")}</span>
-                            <span>{tr("Amallar", "Действия")}</span>
-                          </div>
-                          {document.items.map((purchase) => (
-                            <div className="purchase-document-item" key={purchase.id}>
-                              <div data-label={tr("Mahsulot", "Товар")}>
-                                <strong>{purchase.product_name}</strong>
-                                {purchase.note ? <small title={purchase.note}>{purchase.note}</small> : null}
-                              </div>
-                              <span data-label={tr("Joylashuv", "Место")}>{purchase.product_location || "-"}</span>
-                              <span data-label={tr("Miqdor", "Количество")}><strong>{number(purchase.quantity)} {purchase.unit}</strong></span>
-                              <span data-label={tr("Kirim narxi", "Закупочная цена")}>{money(purchase.purchase_price)}</span>
-                              <span data-label={tr("Qator jami", "Сумма строки")}><strong>{money(purchase.total_cost)}</strong></span>
-                              <div className="row-actions" data-label={tr("Amallar", "Действия")}>
-                                <button
-                                  className="icon-button"
-                                  onClick={() => openEditDocument(document)}
-                                  title={tr("Tahrirlash", "Редактировать")}
-                                >
-                                  <Edit3 size={16} />
-                                </button>
-                                <button
-                                  className="icon-button danger-icon"
-                                  onClick={() => setDeletingPurchase(purchase)}
-                                  title={tr("O‘chirish", "Удалить")}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </Fragment>
               );
             })}
           </tbody>
@@ -1370,6 +1299,21 @@ export function PurchasesPage() {
           )}
         </>}
       </Card>
+
+      <PurchaseDetailsModal
+        document={selectedPurchaseDocument}
+        exportingDocument={exportingDocument}
+        onClose={() => setSelectedPurchaseDocument(null)}
+        onDownload={(document, format) => void exportPurchaseDocument(document, format)}
+        onEdit={(document) => {
+          setSelectedPurchaseDocument(null);
+          openEditDocument(document);
+        }}
+        onDeleteItem={(purchase) => {
+          setSelectedPurchaseDocument(null);
+          setDeletingPurchase(purchase);
+        }}
+      />
 
       <Modal
         open={modalOpen}
