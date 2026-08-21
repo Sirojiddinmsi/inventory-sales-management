@@ -39,6 +39,7 @@ export function SaleDetailsModal({ sale, onClose, onDownload, onEdit, onReturn }
       wide
       className="sale-details-modal"
       bodyClassName="sale-details-body"
+      footerClassName="sale-details-footer"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>{tr("Yopish", "Закрыть")}</Button>
@@ -78,17 +79,40 @@ export function SaleDetailsModal({ sale, onClose, onDownload, onEdit, onReturn }
                 <tbody>
                   {details.items.map((item, index) => (
                     <tr key={item.id}>
-                      <td>{index + 1}</td>
-                      <td><strong>{item.product_name}</strong>{Number(item.returned_sale_quantity) > 0 ? <small>{tr("Qaytarilgan", "Возвращено")}: {number(item.returned_sale_quantity)} {item.unit}</small> : null}</td>
-                      <td><code>{item.product_code || "-"}</code></td>
-                      <td>{number(item.sale_quantity)} {item.unit}</td>
-                      <td>{money(item.sale_price)}</td>
-                      <td>{money(item.discount)}</td>
-                      <td><strong>{money(item.total_amount)}</strong></td>
+                      <td className="sale-detail-index" data-label="#">{index + 1}</td>
+                      <td className="sale-detail-name" data-label={tr("Mahsulot", "\u0422\u043e\u0432\u0430\u0440")}>
+                        <strong>{item.product_name}</strong>
+                        {item.product_code ? <small className="detail-mobile-secondary">{item.product_code}</small> : null}
+                        {Number(item.returned_sale_quantity) > 0 ? <small>{tr("Qaytarilgan", "\u0412\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d\u043e")}: {number(item.returned_sale_quantity)} {item.unit}</small> : null}
+                      </td>
+                      <td className={`sale-detail-code${item.product_code ? "" : " is-empty"}`} data-label={tr("Kod", "\u041a\u043e\u0434")}><code>{item.product_code || "-"}</code></td>
+                      <td className="sale-detail-quantity" data-label={tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}>{number(item.sale_quantity)} {item.unit}</td>
+                      <td className="sale-detail-price" data-label={tr("Narx", "\u0426\u0435\u043d\u0430")}>{money(item.sale_price)}</td>
+                      <td className={`sale-detail-discount${Number(item.discount) > 0 ? "" : " is-zero"}`} data-label={tr("Chegirma", "\u0421\u043a\u0438\u0434\u043a\u0430")}>{money(item.discount)}</td>
+                      <td className="sale-detail-total" data-label={tr("Jami", "\u0421\u0443\u043c\u043c\u0430")}><strong>{money(item.total_amount)}</strong></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="details-mobile-list sale-details-mobile-list">
+              {details.items.map((item) => (
+                <article className="details-mobile-item-card" key={item.id}>
+                  <div className="details-mobile-item-icon" aria-hidden="true">
+                    <Package size={22} />
+                  </div>
+                  <div className="details-mobile-item-main">
+                    <strong>{item.product_name}</strong>
+                    <span>{number(item.sale_quantity)} {item.unit} {"\u00d7"} {money(item.sale_price)}</span>
+                    {item.product_code ? <small>{item.product_code}</small> : null}
+                    {Number(item.discount) > 0 ? <small>{tr("Chegirma", "\u0421\u043a\u0438\u0434\u043a\u0430")}: {money(item.discount)}</small> : null}
+                    {Number(item.returned_sale_quantity) > 0 ? <small>{tr("Qaytarilgan", "\u0412\u043e\u0437\u0432\u0440\u0430\u0449\u0435\u043d\u043e")}: {number(item.returned_sale_quantity)} {item.unit}</small> : null}
+                  </div>
+                  <div className="details-mobile-item-side">
+                    <strong>{money(item.total_amount)}</strong>
+                  </div>
+                </article>
+              ))}
             </div>
           </section>
 

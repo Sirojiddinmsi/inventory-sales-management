@@ -1,5 +1,16 @@
 ﻿# CHANGELOG
 
+## 2026-08-21 — ISSUE-002: Tafsilot modallarining mobil joylashuvini ixchamlashtirish
+
+- O‘zgardi: sotuv va kirim tafsilotlari modalining telefon ekranidagi meta, gorizontal summary-card mahsulot ro‘yxati va 2x2 footer joylashuvi ixchamlashtirildi.
+- Sabab: details modallari mobil ekranda field-grid mahsulot maydonlariga tushib, bitta mahsulot kartasini keraksiz baland qilgan; read-only tafsilot uchun ixcham summary-card kompozitsiyasi yetarli.
+- Ta’sir: faqat `SaleDetailsModal`, `PurchaseDetailsModal`, ularning scoped CSS qoidalari va render testlari.
+- Testlar: `npm.cmd run test --workspace @inventory/web` — 4 test fayl, 27 test o‘tdi; `npm.cmd run typecheck --workspace @inventory/web` — o‘tdi; `npm.cmd run build --workspace @inventory/web` — o‘tdi; lokal demo — foydalanuvchi 2026-08-21 kuni Kirim va Sotuv mobil modal ko‘rinishini tasdiqladi; `git diff --check` — whitespace xatosi topilmadi.
+- Migration/config: yo‘q.
+- Ma’lumot xavfi: API/database, stock/FIFO, qarz, return va report hisoblari o‘zgartirilmagan.
+- Rollback: ISSUE-002 frontend/CSS/test/CHANGELOG diffini qaytarish; database rollback talab qilinmaydi.
+- Ma’lum cheklov: Browser connector mavjud bo‘lmagani uchun avtomatik 320/360/390px screenshot smoke bajarilmadi; lokal ko‘rinish foydalanuvchi tomonidan manual tasdiqlandi.
+
 ## 2026-08-21 — ISSUE-001: Kirim tafsilotlarini modalda ko‘rsatish
 
 - O‘zgardi: kirim hujjati mahsulotlari inline yoyilish o‘rniga read-only modalda ochiladi.

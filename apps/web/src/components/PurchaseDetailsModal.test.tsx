@@ -132,10 +132,43 @@ describe("PurchaseDetailsModal", () => {
     const html = renderModal("uz", documentWithItems([purchase()]));
 
     expect(html).toContain("Kirim tafsilotlari");
+    expect(html).toContain("purchase-details-footer");
     expect(html).toContain("Yopish");
     expect(html).toContain("PDF yuklab olish");
     expect(html).toContain("Excel yuklab olish");
     expect(html).toContain("Tahrirlash");
+  });
+
+  it("keeps mobile card labels and row actions available", () => {
+    const html = renderModal("uz", documentWithItems([purchase()]));
+
+    expect(html).toContain("purchase-detail-name");
+    expect(html).toContain("purchase-detail-quantity");
+    expect(html).toContain("purchase-detail-price");
+    expect(html).toContain("purchase-detail-total");
+    expect(html).toContain("purchase-detail-actions");
+    expect(html).toContain("detail-mobile-secondary");
+    expect(html).toContain("details-mobile-list purchase-details-mobile-list");
+    expect(html).toContain("details-mobile-item-card");
+    expect(html).toContain("details-mobile-item-icon");
+    expect(textContent(html)).toContain("12 metr × 15 000");
+    expect(html).toContain("PRD-001");
+    expect(html).toContain("A-1");
+    expect(html).toContain("data-label=\"Mahsulot\"");
+    expect(html).toContain("data-label=\"Miqdor\"");
+    expect(html).toContain("data-label=\"Kirim narxi\"");
+    expect(html).toContain("data-label=\"Amallar\"");
+    expect(html).toContain("aria-label=\"Tahrirlash\"");
+    expect(html).toContain("aria-label=\"O&#x27;chirish\"");
+  });
+
+  it("marks empty purchase secondary fields so mobile cards can hide placeholders", () => {
+    const html = renderModal("uz", documentWithItems([
+      purchase({ product_code: undefined, product_location: null, note: null })
+    ]));
+
+    expect(html).toContain("purchase-detail-location is-empty");
+    expect(html).not.toContain("detail-mobile-secondary");
   });
 
   it("renders Russian action labels and heading", () => {

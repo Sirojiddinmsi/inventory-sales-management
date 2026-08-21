@@ -47,6 +47,7 @@ export function PurchaseDetailsModal({
       wide
       className="purchase-details-modal"
       bodyClassName="purchase-details-body"
+      footerClassName="purchase-details-footer"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>{tr("Yopish", "Закрыть")}</Button>
@@ -104,16 +105,21 @@ export function PurchaseDetailsModal({
               <tbody>
                 {document.items.map((purchase, index) => (
                   <tr key={purchase.id}>
-                    <td data-label="#">{index + 1}</td>
-                    <td data-label={tr("Mahsulot", "Товар")}>
+                    <td className="purchase-detail-index" data-label="#">{index + 1}</td>
+                    <td className="purchase-detail-name" data-label={tr("Mahsulot", "\u0422\u043e\u0432\u0430\u0440")}>
                       <strong>{purchase.product_name}</strong>
+                      {purchase.product_code || purchase.product_location ? (
+                        <small className="detail-mobile-secondary">
+                          {[purchase.product_code, purchase.product_location].filter(Boolean).join(" / ")}
+                        </small>
+                      ) : null}
                       {purchase.note ? <small title={purchase.note}>{purchase.note}</small> : null}
                     </td>
-                    <td data-label={tr("Joylashuv", "Место")}>{purchase.product_location || "-"}</td>
-                    <td data-label={tr("Miqdor", "Количество")}><strong>{number(purchase.quantity)} {purchase.unit}</strong></td>
-                    <td data-label={tr("Kirim narxi", "Закупочная цена")}>{money(purchase.purchase_price)}</td>
-                    <td data-label={tr("Qator jami", "Сумма строки")}><strong>{money(purchase.total_cost)}</strong></td>
-                    <td data-label={tr("Amallar", "Действия")}>
+                    <td className={`purchase-detail-location${purchase.product_location ? "" : " is-empty"}`} data-label={tr("Joylashuv", "\u041c\u0435\u0441\u0442\u043e")}>{purchase.product_location || "-"}</td>
+                    <td className="purchase-detail-quantity" data-label={tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}><strong>{number(purchase.quantity)} {purchase.unit}</strong></td>
+                    <td className="purchase-detail-price" data-label={tr("Kirim narxi", "\u0417\u0430\u043a\u0443\u043f\u043e\u0447\u043d\u0430\u044f \u0446\u0435\u043d\u0430")}>{money(purchase.purchase_price)}</td>
+                    <td className="purchase-detail-total" data-label={tr("Qator jami", "\u0421\u0443\u043c\u043c\u0430 \u0441\u0442\u0440\u043e\u043a\u0438")}><strong>{money(purchase.total_cost)}</strong></td>
+                    <td className="purchase-detail-actions" data-label={tr("Amallar", "\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u044f")}>
                       <div className="row-actions">
                         <button
                           type="button"
@@ -139,6 +145,45 @@ export function PurchaseDetailsModal({
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="details-mobile-list purchase-details-mobile-list">
+            {document.items.map((purchase) => (
+              <article className="details-mobile-item-card" key={purchase.id}>
+                <div className="details-mobile-item-icon" aria-hidden="true">
+                  <Package size={22} />
+                </div>
+                <div className="details-mobile-item-main">
+                  <strong>{purchase.product_name}</strong>
+                  <span>{number(purchase.quantity)} {purchase.unit} {"\u00d7"} {money(purchase.purchase_price)}</span>
+                  {purchase.product_code || purchase.product_location ? (
+                    <small>{[purchase.product_code, purchase.product_location].filter(Boolean).join(" / ")}</small>
+                  ) : null}
+                </div>
+                <div className="details-mobile-item-side">
+                  <strong>{money(purchase.total_cost)}</strong>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={() => onEdit(document)}
+                      title={tr("Tahrirlash", "Ð ÐµÐ´Ð°ÐºÑ‚Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ")}
+                      aria-label={tr("Tahrirlash", "Ð ÐµÐ´Ð°ÐºÑ‚Ð¸Ñ€Ð¾Ð²Ð°Ñ‚ÑŒ")}
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button danger-icon"
+                      onClick={() => onDeleteItem(purchase)}
+                      title={tr("O'chirish", "Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ")}
+                      aria-label={tr("O'chirish", "Ð£Ð´Ð°Ð»Ð¸Ñ‚ÑŒ")}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 
