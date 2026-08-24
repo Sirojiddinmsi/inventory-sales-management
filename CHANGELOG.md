@@ -1,4 +1,14 @@
-﻿# CHANGELOG
+# CHANGELOG
+## 2026-08-24 — ISSUE-003: Supplier return tafsilotlarini modalda ko‘rsatish
+
+- O‘zgardi: yetkazib beruvchiga qaytarish hujjati mahsulotlari inline jadval qatori o‘rniga read-only modalda ochiladi.
+- Sabab: `expandedReturnDocumentIds` va conditional detail `<tr>` return tafsilotlarini asosiy jadval ichida yoyib, keyingi hujjat/actionlar bilan vizual chalkashlik yaratgan.
+- Ta’sir: faqat purchases frontend state/renderi, yangi `SupplierReturnDetailsModal`, scoped details CSS va render testlari.
+- Testlar: `npm.cmd run test --workspace @inventory/web` — 5 test fayl, 34 test o‘tdi; `npm.cmd run typecheck --workspace @inventory/web` — o‘tdi; `npm.cmd run build --workspace @inventory/web` — o‘tdi; `npm.cmd run test` — API 9 fayl/42 test va web 5 fayl/34 test o‘tdi; `npm.cmd run typecheck` — API va web o‘tdi; lokal demo - foydalanuvchi supplier return modal ko`rinishini tasdiqladi; demo API logida bitta DELETE /api/v1/supplier-returns/documents/... write so`rovi kuzatildi, shuning uchun read-only smoke sharti to`liq tasdiqlanmadi.
+- Migration/config: yo‘q.
+- Ma’lumot xavfi: API/database, stock/FIFO, supplier return allocationlari, qarz/payment va report hisoblari o‘zgartirilmagan.
+- Rollback: ISSUE-003 frontend component/state/CSS/test/CHANGELOG diffini qaytarib, eski inline renderni tiklash; database rollback talab qilinmaydi.
+- Ma`lum cheklov: avtomatik browser screenshot/Network smoke bajarilmadi; lokal demo foydalanuvchi tomonidan manual tasdiqlandi, ammo API logda bitta lokal supplier return DELETE write so`rovi qayd etildi.
 
 ## 2026-08-21 — ISSUE-002: Tafsilot modallarining mobil joylashuvini ixchamlashtirish
 

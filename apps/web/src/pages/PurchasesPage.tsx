@@ -16,7 +16,7 @@ import {
   Undo2,
   X
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { readSheet } from "read-excel-file/browser";
 import {
@@ -35,6 +35,7 @@ import {
 import { useI18n } from "../contexts/I18nContext";
 import { PurchaseDetailsModal } from "../components/PurchaseDetailsModal";
 import { ProductDetailsModal } from "../components/ProductDetailsModal";
+import { SupplierReturnDetailsModal } from "../components/SupplierReturnDetailsModal";
 import { api, download } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
 import { productImageUrl } from "../lib/productImage";
@@ -250,7 +251,7 @@ export function PurchasesPage() {
   const [supplierReturnDate, setSupplierReturnDate] = useState(newSupplierReturnDate);
   const [supplierReturnNote, setSupplierReturnNote] = useState("");
   const [returnLines, setReturnLines] = useState<SupplierReturnLine[]>([newSupplierReturnLine()]);
-  const [expandedReturnDocumentIds, setExpandedReturnDocumentIds] = useState<string[]>([]);
+  const [selectedSupplierReturnDocument, setSelectedSupplierReturnDocument] = useState<SupplierReturnDocument | null>(null);
   const [deletingSupplierReturn, setDeletingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
   const [editingSupplierReturn, setEditingSupplierReturn] = useState<SupplierReturnDocument | null>(null);
   const [editingDocument, setEditingDocument] = useState<PurchaseDocument | null>(null);
@@ -1195,11 +1196,8 @@ export function PurchasesPage() {
               </tr>
             </thead>
             <tbody>
-              {supplierReturns.data?.data.map((document) => {
-                const expanded = expandedReturnDocumentIds.includes(document.id);
-                return (
-                  <Fragment key={document.id}>
-                    <tr className={expanded ? "purchase-document-row expanded" : "purchase-document-row"}>
+              {supplierReturns.data?.data.map((document) => (
+                    <tr className="purchase-document-row" key={document.id}>
                       <td data-label={tr("Qaytarish hujjati", "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442 \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")}>
                         <div className="purchase-document-number">
                           <span className="product-avatar"><Undo2 size={17} /></span>
@@ -1220,15 +1218,12 @@ export function PurchasesPage() {
                         <div className="row-actions">
                           <button
                             type="button"
-                            className="icon-button purchase-document-toggle"
-                            onClick={() => setExpandedReturnDocumentIds((current) =>
-                              current.includes(document.id)
-                                ? current.filter((id) => id !== document.id)
-                                : [...current, document.id]
-                            )}
-                            aria-expanded={expanded}
+                            className="icon-button"
+                            onClick={() => setSelectedSupplierReturnDocument(document)}
+                            title={tr("Qaytarish tafsilotlarini ko'rish", "\u041f\u043e\u0441\u043c\u043e\u0442\u0440\u0435\u0442\u044c \u0434\u0435\u0442\u0430\u043b\u0438 \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")}
+                            aria-label={tr("Qaytarish tafsilotlarini ko'rish", "\u041f\u043e\u0441\u043c\u043e\u0442\u0440\u0435\u0442\u044c \u0434\u0435\u0442\u0430\u043b\u0438 \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")}
                           >
-                            {expanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                            <Eye size={17} />
                           </button>
                           <button
                             type="button"
@@ -1250,43 +1245,7 @@ export function PurchasesPage() {
                         </div>
                       </td>
                     </tr>
-                    {expanded ? (
-                      <tr className="purchase-document-detail-row">
-                        <td colSpan={10} className="purchase-document-detail-cell">
-                          <div className="purchase-document-items supplier-return-items">
-                            <div className="purchase-document-detail-heading">
-                              <strong>{tr("Qaytarilgan mahsulotlar", "Возвращенные товары")}</strong>
-                            </div>
-                            <div className="purchase-document-item purchase-document-item-head supplier-return-item">
-                              <span>{tr("Mahsulot", "\u0422\u043e\u0432\u0430\u0440")}</span>
-                              <span>{tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}</span>
-                              <span>{tr("FIFO tannarx, jami", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c, \u0432\u0441\u0435\u0433\u043e")}</span>
-                              <span>{tr("Kelishilgan narx, 1 dona uchun", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0446\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u0443")}</span>
-                              <span>{tr("Kelishilgan summa, jami", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430, \u0432\u0441\u0435\u0433\u043e")}</span>
-                              <span>{tr("Qaytarish foydasi", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")}</span>
-                            </div>
-                            {document.items.map((item) => (
-                              <div className="purchase-document-item supplier-return-item" key={item.id}>
-                                <div data-label={tr("Mahsulot", "\u0422\u043e\u0432\u0430\u0440")}>
-                                  <strong>{item.product_name}</strong>
-                                  {item.note ? <small title={item.note}>{item.note}</small> : null}
-                                </div>
-                                <span data-label={tr("Miqdor", "\u041a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432\u043e")}><strong>{number(item.quantity)} {item.unit}</strong></span>
-                                <span data-label={tr("FIFO tannarx, jami", "FIFO-\u0441\u0435\u0431\u0435\u0441\u0442\u043e\u0438\u043c\u043e\u0441\u0442\u044c, \u0432\u0441\u0435\u0433\u043e")}>{money(item.fifo_cost)}</span>
-                                <span data-label={tr("Kelishilgan narx, 1 dona uchun", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0446\u0435\u043d\u0430 \u0437\u0430 \u0435\u0434\u0438\u043d\u0438\u0446\u0443")}>{money(item.agreed_return_price_per_unit)}</span>
-                                <span data-label={tr("Kelishilgan summa, jami", "\u0421\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0441\u0443\u043c\u043c\u0430, \u0432\u0441\u0435\u0433\u043e")}><strong>{money(item.total_agreed_return_amount)}</strong></span>
-                                <span data-label={tr("Qaytarish foydasi", "\u041f\u0440\u0438\u0431\u044b\u043b\u044c \u0432\u043e\u0437\u0432\u0440\u0430\u0442\u0430")} className={item.supplier_return_profit >= 0 ? "positive" : "negative"}>
-                                  <strong>{money(item.supplier_return_profit)}</strong>
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
+              ))}
             </tbody>
           </DataTable>
           {supplierReturns.data && (
@@ -1312,6 +1271,19 @@ export function PurchasesPage() {
         onDeleteItem={(purchase) => {
           setSelectedPurchaseDocument(null);
           setDeletingPurchase(purchase);
+        }}
+      />
+
+      <SupplierReturnDetailsModal
+        document={selectedSupplierReturnDocument}
+        onClose={() => setSelectedSupplierReturnDocument(null)}
+        onEdit={(document) => {
+          setSelectedSupplierReturnDocument(null);
+          openEditSupplierReturn(document);
+        }}
+        onDelete={(document) => {
+          setSelectedSupplierReturnDocument(null);
+          setDeletingSupplierReturn(document);
         }}
       />
 
