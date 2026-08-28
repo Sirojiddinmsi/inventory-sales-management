@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { debtPaymentParamSchema, debtPaymentUpdateSchema } from "./debt.schema.js";
+import {
+  customerDebtDetailsSchema,
+  customerDebtPaymentSchema,
+  debtPaymentParamSchema,
+  debtPaymentUpdateSchema
+} from "./debt.schema.js";
 
 const debtId = "11111111-1111-4111-8111-111111111111";
 const paymentId = "22222222-2222-4222-8222-222222222222";
@@ -36,5 +41,101 @@ describe("debt payment edit schemas", () => {
         paidAt: "2026-07-27T06:00:00.000Z"
       }).success
     ).toBe(false);
+  });
+});
+
+describe("customer debt payment schema", () => {
+  const requestId = "33333333-3333-4333-8333-333333333333";
+  const customerId = "44444444-4444-4444-8444-444444444444";
+
+  it("accepts UUID identity and a two-decimal amount", () => {
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "CUSTOMER_ID",
+      customerId,
+      amount: 250000.25,
+      paymentMethod: "CASH"
+    }).success).toBe(true);
+  });
+
+  it("accepts legacy name and phone identity", () => {
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "LEGACY",
+      customerName: "  Legacy Customer  ",
+      phone: "+998 90 000 00 04",
+      amount: 250000,
+      paymentMethod: "MIXED",
+      cashAmount: 100000,
+      cardAmount: 100000,
+      transferAmount: 50000
+    }).success).toBe(true);
+  });
+
+  it("rejects missing, invalid, and reused identity fields", () => {
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "CUSTOMER_ID",
+      amount: 100000,
+      paymentMethod: "CARD"
+    }).success).toBe(false);
+
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "LEGACY",
+      customerId,
+      customerName: "Legacy",
+      amount: 100000,
+      paymentMethod: "CARD"
+    }).success).toBe(false);
+
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "CUSTOMER_ID",
+      customerId,
+      customerName: "Must not be used",
+      amount: 100000,
+      paymentMethod: "CARD"
+    }).success).toBe(false);
+  });
+
+  it("rejects invalid requestId, sub-cent amount, and mixed mismatch", () => {
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId: "not-a-uuid",
+      identityType: "CUSTOMER_ID",
+      customerId,
+      amount: 100000,
+      paymentMethod: "CASH"
+    }).success).toBe(false);
+
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "CUSTOMER_ID",
+      customerId,
+      amount: 100.001,
+      paymentMethod: "CASH"
+    }).success).toBe(false);
+
+    expect(customerDebtPaymentSchema.safeParse({
+      requestId,
+      identityType: "LEGACY",
+      customerName: "Legacy",
+      amount: 100000,
+      paymentMethod: "MIXED",
+      cashAmount: 40000,
+      cardAmount: 10000,
+      transferAmount: 0
+    }).success).toBe(false);
+  });
+
+  it("parses an explicit read-only details identity and archive scope", () => {
+    const result = customerDebtDetailsSchema.safeParse({
+      identityType: "CUSTOMER_ID",
+      customerId,
+      archived: "false"
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.archived).toBe(false);
   });
 });

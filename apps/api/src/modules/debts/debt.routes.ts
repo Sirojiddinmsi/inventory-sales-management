@@ -5,6 +5,8 @@ import { validate } from "../../shared/validation.js";
 import { idParamSchema } from "../categories/category.schema.js";
 import { debtController } from "./debt.controller.js";
 import {
+  customerDebtDetailsSchema,
+  customerDebtPaymentSchema,
   debtArchiveSchema,
   debtListSchema,
   debtPaymentParamSchema,
@@ -17,6 +19,16 @@ export const debtRouter = Router();
 debtRouter.get("/", validate(debtListSchema, "query"), asyncHandler(debtController.list));
 debtRouter.get("/summary", asyncHandler(debtController.summary));
 debtRouter.get("/customers", validate(debtListSchema, "query"), asyncHandler(debtController.customers));
+debtRouter.get(
+  "/customer-details",
+  validate(customerDebtDetailsSchema, "query"),
+  asyncHandler(debtController.customerDetails)
+);
+debtRouter.post(
+  "/customer-payments",
+  validate(customerDebtPaymentSchema),
+  asyncHandler(debtController.payCustomer)
+);
 debtRouter.get("/:id", validate(idParamSchema, "params"), asyncHandler(debtController.get));
 debtRouter.post(
   "/:id/payments",

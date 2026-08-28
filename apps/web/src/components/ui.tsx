@@ -102,7 +102,8 @@ export function Modal({
   wide = false,
   className = "",
   bodyClassName = "",
-  footerClassName = ""
+  footerClassName = "",
+  closeLabel = "Yopish"
 }: {
   open: boolean;
   title: string;
@@ -114,6 +115,7 @@ export function Modal({
   className?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  closeLabel?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -131,6 +133,7 @@ export function Modal({
         className={`modal ${wide ? "modal-wide" : ""} ${className}`.trim()}
         role="dialog"
         aria-modal="true"
+        aria-label={title}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-header">
@@ -138,7 +141,7 @@ export function Modal({
             <h2>{title}</h2>
             {description && <p>{description}</p>}
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Yopish">
+          <button className="icon-button" onClick={onClose} aria-label={closeLabel}>
             <X size={20} />
           </button>
         </div>

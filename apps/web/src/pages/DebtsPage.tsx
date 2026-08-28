@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, ChevronDown, ChevronRight, CreditCard, Edit3, HandCoins, Phone, Trash2, Undo2, Users } from "lucide-react";
-import { Fragment, useEffect, useState } from "react";
+import { Archive, CreditCard, Edit3, Eye, HandCoins, Phone, Trash2, Undo2, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { CustomerDebtDetailsModal } from "../components/CustomerDebtDetailsModal";
 import {
   Badge,
   Button,
@@ -62,7 +63,7 @@ export function DebtsPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<DebtFilter>("active");
   const [view, setView] = useState<DebtView>("customers");
-  const [expandedCustomer, setExpandedCustomer] = useState<string | null>(null);
+  const [customerModal, setCustomerModal] = useState<DebtCustomerGroup | null>(null);
   const [selected, setSelected] = useState<Debt | null>(null);
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<DebtPaymentMethod>("CASH");
@@ -120,11 +121,12 @@ export function DebtsPage() {
   useEffect(() => {
     setPage(1);
     setCustomerPage(1);
-    setExpandedCustomer(null);
+    setCustomerModal(null);
   }, [search, filter]);
 
   const refreshDebts = () => {
     void queryClient.invalidateQueries({ queryKey: ["debts"] });
+    void queryClient.invalidateQueries({ queryKey: ["debt"] });
     void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     void queryClient.invalidateQueries({ queryKey: ["reports"] });
   };
@@ -351,11 +353,9 @@ export function DebtsPage() {
               </thead>
               <tbody>
                 {customerDebts.data?.data.map((group) => {
-                  const groupKey = `${group.customer_key}:${group.phone_key}`;
-                  const expanded = expandedCustomer === groupKey;
+                  const groupKey = `${group.identity_type}:${group.customer_key}:${group.phone_key}`;
                   return (
-                    <Fragment key={groupKey}>
-                      <tr className="customer-debt-row">
+                      <tr className="customer-debt-row" key={groupKey}>
                         <td data-label={tr("Mijoz", "Клиент")}>
                           <div className="product-cell">
                             <span className="product-avatar"><Users size={17} /></span>
@@ -374,40 +374,17 @@ export function DebtsPage() {
                           <Badge tone={debtTone(group.status)}>{debtStatusText(group.status, tr)}</Badge>
                         </td>
                         <td data-label={tr("Amallar", "Действия")}>
-                          <Button variant="secondary" size="sm" onClick={() => setExpandedCustomer(expanded ? null : groupKey)}>
-                            {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                            {expanded ? tr("Yopish", "Скрыть") : tr("Nakladnoylar", "Накладные")}
-                          </Button>
+                          <button
+                            type="button"
+                            className="icon-button"
+                            title={tr("Mijoz nakladnoylarini ko‘rish", "Посмотреть накладные клиента")}
+                            aria-label={tr("Mijoz nakladnoylarini ko‘rish", "Посмотреть накладные клиента")}
+                            onClick={() => setCustomerModal(group)}
+                          >
+                            <Eye size={16} />
+                          </button>
                         </td>
                       </tr>
-                      {expanded && (
-                        <tr className="customer-debt-details-row">
-                          <td colSpan={8}>
-                            <div className="customer-debt-details">
-                              {group.debts.map((debt) => (
-                                <div key={debt.id} className="customer-debt-invoice">
-                                  <div>
-                                    <code>{debt.invoice_number}</code>
-                                    <small>{date(debt.created_at)} · {date(debt.due_date)}</small>
-                                  </div>
-                                  <span>{money(debt.amount)}</span>
-                                  <span className="positive">{money(debt.paid_amount)}</span>
-                                  <strong>{money(debt.remaining_amount)}</strong>
-                                  <Badge tone={debtTone(debt.status)}>{debtStatusText(debt.status, tr)}</Badge>
-                                  <Button variant="secondary" size="sm" onClick={() => openDebt(debt)}>
-                                    {Number(debt.remaining_amount) > 0 ? (
-                                      <><HandCoins size={14} /> {tr("To‘lov", "Оплата")}</>
-                                    ) : (
-                                      tr("Batafsil", "Подробнее")
-                                    )}
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
                   );
                 })}
               </tbody>
@@ -519,6 +496,16 @@ export function DebtsPage() {
           </>
         )}
       </Card>
+
+      <CustomerDebtDetailsModal
+        group={customerModal}
+        archived={isArchiveView}
+        onClose={() => setCustomerModal(null)}
+        onOpenDebt={(debt) => {
+          setCustomerModal(null);
+          openDebt(debt);
+        }}
+      />
 
       <Modal
         open={Boolean(selected)}

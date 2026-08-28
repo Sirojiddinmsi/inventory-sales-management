@@ -1,4 +1,16 @@
 # CHANGELOG
+## 2026-08-27 — ISSUE-004: Mijoz qarzlarini modalda ko‘rish va umumiy to‘lovni taqsimlash
+
+- O‘zgardi: mijoz qatori `Eye` actioni endi inline `<tr>` o‘rniga compact qarz modalini ochadi; modal serverdan identity bo‘yicha barcha tegishli nakladnoylarni olib, jami/to‘langan/qoldiq, muddat/holat, individual nakladnoy actionlari va aktiv mijoz uchun bitta umumiy to‘lov formasini ko‘rsatadi.
+- API: UUIDli mijozlar faqat `customer_id` bilan ajratiladi; `customer_id IS NULL` legacy qarzlargina server-normalized ism+telefon fallbackidan foydalanadi. Umumiy to‘lov barcha aktiv, arxivlanmagan qoldiqlarga `created_at ASC, id ASC` bo‘yicha bitta transactionda taqsimlanadi; ortiqcha summa 422 va full rollback beradi.
+- Idempotency/audit: UUID `requestId` uchun additiv batch yozuvi va unga bog‘langan child `debt_payments` yaratildi. Bir xil request qayta yuborilganda original receipt qaytadi; boshqa payload 409 beradi. Batch child admin orqali tahrirlansa joriy debt/report qiymatlari qayta hisoblanadi, original batch receipt saqlanadi.
+- Migration: `019_customer_debt_payment_batches.sql` additiv va mavjud ikkita `018` migrationga tegmaydi. Fresh `issue004_test` disposable localhost DBda barcha 20 migration qo‘llandi va `019` bevosita ikkinchi marta xatosiz bajarildi.
+- Testlar: API — 11 fayl/65 test o‘tdi, jumladan disposable DBdagi 9 integration test (100/200/300→250, exact close, injected rollback, overpay no-write, archive/paid exclude, UUID collision/legacy isolation, idempotency/admin audit, barcha split/reportlar, concurrency va stock/FIFO/sale/profit/return snapshotlari); web — 6 fayl/41 test o‘tdi; monorepo typecheck, API build, web build va full test o‘tdi; `git diff --check` — whitespace xatosi topilmadi.
+- Lokal demo: productionga ulanmagan `issue004_demo` (`127.0.0.1:55432`)da authenticated demo va 100k/200k/300k toza qarzlar tayyorlandi; foydalanuvchi modalni desktop va telefonda tekshirib release uchun tasdiqladi. Finalizatsiyada demo payment yuborilmadi.
+- Invariantlar: integration tekshiruvida `paid_amount = SUM(debt_payments.amount)`, qoldiq/status va payment splitlari aniq qoldi; stock, FIFO layer/allocation, sale `payment_type=DEBT`, cost/profit va return snapshotlari paymentdan oldin/keyin teng bo‘ldi.
+- Rollback: approvalgacha target worktree diffini va disposable DB/runtime’ni olib tashlash mumkin; auditor/preserved worktree o‘zgarmagan. Keyingi git bosqichida faqat revert ishlatiladi; productionda additiv schema data paydo bo‘lsa migration tablelarini drop qilish rejalashtirilmagan.
+- Ma’lum cheklov: Browser connector mavjud bo‘lmagani uchun 1366 va 360/390/430 vizual overflow hamda Network one-POST smoke avtomatlashtirilmagan va passed deb belgilanmagan; desktop/mobile ko‘rinish foydalanuvchi tomonidan manual tasdiqlangan. Release commitidan oldin production deploy/migration bajarilmagan.
+
 ## 2026-08-24 — ISSUE-003: Supplier return tafsilotlarini modalda ko‘rsatish
 
 - O‘zgardi: yetkazib beruvchiga qaytarish hujjati mahsulotlari inline jadval qatori o‘rniga read-only modalda ochiladi.

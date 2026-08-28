@@ -335,6 +335,7 @@ export type SaleDetails = Sale & {
 export type Debt = {
   id: string;
   sale_id: string;
+  customer_id: string | null;
   invoice_number: string;
   customer_name: string;
   phone: string | null;
@@ -351,6 +352,8 @@ export type Debt = {
 };
 
 export type DebtCustomerGroup = {
+  identity_type: "CUSTOMER_ID" | "LEGACY";
+  customer_id: string | null;
   customer_key: string;
   phone_key: string;
   customer_name: string;
@@ -364,6 +367,32 @@ export type DebtCustomerGroup = {
   has_overdue: boolean;
   status: DebtStatus;
   debts: Debt[];
+};
+
+export type CustomerDebtDetails = DebtCustomerGroup;
+
+export type CustomerDebtPaymentResult = {
+  batchId: string;
+  requestId: string;
+  amount: number;
+  paymentMethod: DebtPaymentMethod;
+  cashAmount: number;
+  cardAmount: number;
+  transferAmount: number;
+  paidAt: string;
+  allocations: Array<{
+    paymentId: string;
+    debtId: string;
+    invoiceNumber: string;
+    amount: number;
+    cashAmount: number;
+    cardAmount: number;
+    transferAmount: number;
+    debtAmount: number;
+    paidAmount: number;
+    remainingAmount: number;
+    status: Exclude<DebtStatus, "OVERDUE">;
+  }>;
 };
 
 export type DebtPayment = {

@@ -182,14 +182,37 @@ h1, h2, h3, strong { font-family: "Manrope", "Segoe UI", system-ui, sans-serif; 
 .debt-view-tabs button:hover { border-color: #93c5fd; color: #1d4ed8; }
 .debt-view-tabs button.active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
 .customer-debt-row { background: #fff; }
-.customer-debt-details-row td { padding: 0 !important; background: #f8fafc; }
-.customer-debt-details { padding: 12px; display: grid; gap: 8px; }
-.customer-debt-invoice { min-height: 52px; padding: 10px 12px; display: grid; grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(110px, auto)) auto auto; align-items: center; gap: 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
-.customer-debt-invoice div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.customer-debt-invoice code { color: #1e293b; font-weight: 800; }
-.customer-debt-invoice small { color: var(--muted); font-size: 10px; }
-.customer-debt-invoice span,
-.customer-debt-invoice strong { white-space: nowrap; font-size: 12px; }
+.customer-debt-modal { width: min(1040px, 96vw); }
+.customer-debt-modal-body { padding: 0; overscroll-behavior: contain; }
+.customer-debt-modal-content { display: flex; flex-direction: column; gap: 18px; padding: 18px 20px; }
+.customer-debt-modal-state { min-height: 260px; padding: 28px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); text-align: center; }
+.customer-debt-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.customer-debt-summary-grid > div { min-height: 70px; padding: 11px 12px; display: flex; flex-direction: column; justify-content: center; gap: 6px; border: 1px solid var(--border); border-radius: 9px; background: #f8fafc; }
+.customer-debt-summary-grid span { color: var(--muted); font-size: 10px; }
+.customer-debt-summary-grid strong { min-width: 0; display: inline-flex; align-items: center; gap: 7px; overflow-wrap: anywhere; color: #0f172a; font-size: 13px; }
+.modal-section-title { min-height: 32px; display: flex; align-items: center; gap: 8px; color: #334155; }
+.modal-section-title strong { font-size: 13px; }
+.modal-section-title > span { margin-left: auto; color: var(--muted); font-size: 11px; }
+.customer-debt-invoice-list { display: grid; gap: 8px; }
+.customer-debt-invoice-card { min-height: 64px; padding: 10px 12px; display: grid; grid-template-columns: minmax(190px, 1fr) repeat(3, minmax(94px, auto)) minmax(110px, auto) 36px; align-items: center; gap: 12px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }
+.customer-debt-invoice-card > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.customer-debt-invoice-card code { overflow: hidden; color: #1e293b; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.customer-debt-invoice-card span,
+.customer-debt-invoice-card small { color: var(--muted); font-size: 9px; }
+.customer-debt-invoice-card strong { color: #1e293b; font-size: 12px; white-space: nowrap; }
+.customer-debt-invoice-card .icon-button { width: 36px; height: 36px; min-height: 36px; }
+.customer-payment-panel { padding: 14px; display: grid; gap: 13px; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; }
+.customer-payment-splits { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.allocation-preview,
+.allocation-result { display: grid; gap: 7px; }
+.allocation-preview { padding: 10px 12px; border: 1px dashed #93c5fd; border-radius: 9px; background: #eff6ff; }
+.allocation-preview > div,
+.allocation-result > div:not(.modal-section-title) { min-height: 32px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; }
+.allocation-preview > small { color: #64748b; font-size: 9px; line-height: 1.45; }
+.allocation-result { padding: 12px; border: 1px solid #86efac; border-radius: 9px; background: #f0fdf4; }
+.allocation-result > div:not(.modal-section-title) { display: grid; grid-template-columns: minmax(130px, 1fr) auto minmax(190px, auto); border-bottom: 1px solid rgba(22, 163, 74, .16); }
+.allocation-result > div:last-child { border-bottom: 0; }
+.allocation-result small { color: var(--muted); text-align: right; }
 .purchase-document-row.expanded td { background: #f8fbff; }
 .purchase-document-number { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
 .purchase-document-detail-cell { padding: 0 !important; background: #f8fafc; }
@@ -1274,15 +1297,15 @@ td strong { color: #1e293b; font-size: 12px; }
   .purchase-document-item > div:first-child small { max-width: 58%; white-space: normal; text-align: right; }
   .purchase-document-item .row-actions { min-height: 44px; border-bottom: 0; }
   .purchase-document-item .row-actions::before { margin-right: auto; }
-  .customer-debt-invoice {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-    gap: 7px;
-  }
-  .customer-debt-invoice .button {
-    width: 100%;
-    min-height: 44px;
-  }
+  .customer-debt-modal-content { padding: 14px; }
+  .customer-debt-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .customer-debt-invoice-card { padding: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 10px; }
+  .customer-debt-invoice-main { grid-column: 1 / -1; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .customer-debt-invoice-card > .badge { align-self: center; justify-self: start; }
+  .customer-debt-invoice-card .icon-button { width: 44px; height: 44px; min-height: 44px; justify-self: end; }
+  .customer-payment-splits { grid-template-columns: 1fr; }
+  .allocation-result > div:not(.modal-section-title) { grid-template-columns: 1fr auto; }
+  .allocation-result small { grid-column: 1 / -1; text-align: left; }
   .filters > * { width: 100% !important; }
   .filters .search-input { width: 100%; }
   .input, .button, .icon-button, .sale-product-trigger, .checkbox-filter { min-height: 44px; font-size: 16px; }
@@ -1890,4 +1913,24 @@ td strong { color: #1e293b; font-size: 12px; }
   margin: 10px 0 0;
   font-size: 44px;
   color: #1e293b;
+}
+
+@media (prefers-color-scheme: dark) {
+  .customer-debt-modal { color: #e2e8f0; background: #0f172a; }
+  .customer-debt-modal .modal-header,
+  .customer-debt-modal .modal-footer { border-color: #334155; background: #0f172a; }
+  .customer-debt-modal .modal-header h2,
+  .customer-debt-modal .modal-section-title,
+  .customer-debt-modal .customer-debt-summary-grid strong,
+  .customer-debt-modal .customer-debt-invoice-card strong,
+  .customer-debt-modal .customer-debt-invoice-card code { color: #e2e8f0; }
+  .customer-debt-modal .customer-debt-summary-grid > div,
+  .customer-debt-modal .customer-payment-panel { border-color: #334155; background: #111c2f; }
+  .customer-debt-modal .customer-debt-invoice-card { border-color: #334155; background: #162033; }
+  .customer-debt-modal .input,
+  .customer-debt-modal .button-secondary { color: #e2e8f0; border-color: #475569; background: #1e293b; }
+  .customer-debt-modal .allocation-preview { color: #dbeafe; border-color: #3b82f6; background: #172554; }
+  .customer-debt-modal .allocation-result { color: #dcfce7; border-color: #22c55e; background: #052e16; }
+  .customer-debt-modal .customer-debt-invoice-main,
+  .customer-debt-modal .allocation-result > div:not(.modal-section-title) { border-color: #334155; }
 }

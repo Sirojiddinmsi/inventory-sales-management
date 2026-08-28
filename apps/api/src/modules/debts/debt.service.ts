@@ -13,6 +13,12 @@ export class DebtService {
     return { data: result.rows, meta: paginationMeta(result.total, input.page, input.limit) };
   }
 
+  async customerDetails(input: Parameters<typeof debtRepository.customerDetails>[0]) {
+    const result = await debtRepository.customerDetails(input);
+    if (!result) throw new AppError(404, "Customer debt group not found", "CUSTOMER_DEBTS_NOT_FOUND");
+    return result;
+  }
+
   async get(id: string) {
     const debt = await debtRepository.get(id);
     if (!debt) throw new AppError(404, "Debt not found", "DEBT_NOT_FOUND");
@@ -29,6 +35,13 @@ export class DebtService {
     userId: string
   ) {
     return debtRepository.pay({ ...input, debtId, receivedBy: userId });
+  }
+
+  payCustomer(
+    input: Omit<Parameters<typeof debtRepository.payCustomer>[0], "receivedBy">,
+    userId: string
+  ) {
+    return debtRepository.payCustomer({ ...input, receivedBy: userId });
   }
 
   updatePayment(

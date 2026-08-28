@@ -10,6 +10,10 @@ export class DebtController {
     res.json(await debtService.customers(req.query as never));
   }
 
+  async customerDetails(req: Request, res: Response) {
+    res.json(await debtService.customerDetails(req.query as never));
+  }
+
   async get(req: Request, res: Response) {
     res.json(await debtService.get(String(req.params.id)));
   }
@@ -20,6 +24,10 @@ export class DebtController {
 
   async pay(req: Request, res: Response) {
     res.status(201).json(await debtService.pay(String(req.params.id), req.body, req.user!.id));
+  }
+
+  async payCustomer(req: Request, res: Response) {
+    res.status(201).json(await debtService.payCustomer(req.body, req.user!.id));
   }
 
   async updatePayment(req: Request, res: Response) {
