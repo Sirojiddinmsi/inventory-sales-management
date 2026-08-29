@@ -2,7 +2,11 @@ import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../contexts/I18nContext";
 import type { CustomerDebtPaymentResult, Debt, DebtCustomerGroup } from "../types/api";
-import { buildCustomerDebtPreview, CustomerDebtDetailsModal } from "./CustomerDebtDetailsModal";
+import {
+  buildCustomerDebtPreview,
+  customerDebtDetailsScopeForFilter,
+  CustomerDebtDetailsModal
+} from "./CustomerDebtDetailsModal";
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
@@ -12,6 +16,10 @@ const mocks = vi.hoisted(() => ({
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
   mutationOptions: undefined as Record<string, (...args: unknown[]) => unknown> | undefined,
+  queryOptions: undefined as {
+    queryKey: unknown[];
+    queryFn: () => unknown;
+  } | undefined,
   mutationPending: false,
   mutationError: null as Error | null,
   queryData: null as DebtCustomerGroup | null
@@ -23,12 +31,15 @@ vi.mock("react-hot-toast", () => ({
 }));
 vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
-  useQuery: () => ({
-    data: mocks.queryData,
-    isLoading: false,
-    isError: false,
-    refetch: mocks.refetch
-  }),
+  useQuery: (options: { queryKey: unknown[]; queryFn: () => unknown }) => {
+    mocks.queryOptions = options;
+    return {
+      data: mocks.queryData,
+      isLoading: false,
+      isError: false,
+      refetch: mocks.refetch
+    };
+  },
   useMutation: (options: Record<string, (...args: unknown[]) => unknown>) => {
     mocks.mutationOptions = options;
     return {
@@ -96,7 +107,7 @@ function renderModal(
     <I18nProvider>
       <CustomerDebtDetailsModal
         group={selectedGroup}
-        archived={false}
+        scope="active"
         onClose={vi.fn()}
         onOpenDebt={vi.fn()}
         {...props}
@@ -132,11 +143,23 @@ const paymentResult: CustomerDebtPaymentResult = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.mutationOptions = undefined;
+  mocks.queryOptions = undefined;
   mocks.mutationPending = false;
   mocks.mutationError = null;
 });
 
 describe("CustomerDebtDetailsModal", () => {
+  it.each([
+    ["active", "active"],
+    ["paid", "paid"],
+    ["all", "all"],
+    ["archive", "archive"],
+    ["overdue", "active"],
+    ["partial", "active"]
+  ] as const)("maps the %s list filter to the %s details scope", (filter, scope) => {
+    expect(customerDebtDetailsScopeForFilter(filter)).toBe(scope);
+  });
+
   it("does not render or write when no customer is selected", () => {
     const html = renderModal(null);
 
@@ -160,6 +183,62 @@ describe("CustomerDebtDetailsModal", () => {
     expect(html).not.toContain("customer-debt-details-row");
     expect(mocks.api).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["active", [debt({ id: "active", invoice_number: "INV-ACTIVE" })], "INV-ACTIVE", true],
+    ["paid", [debt({
+      id: "paid",
+      invoice_number: "INV-PAID",
+      paid_amount: 100000,
+      remaining_amount: 0,
+      status: "PAID"
+    })], "INV-PAID", false],
+    ["all", [
+      debt({ id: "all-active", invoice_number: "INV-ALL-ACTIVE" }),
+      debt({
+        id: "all-paid",
+        invoice_number: "INV-ALL-PAID",
+        paid_amount: 100000,
+        remaining_amount: 0,
+        status: "PAID"
+      })
+    ], "INV-ALL-PAID", true],
+    ["archive", [debt({
+      id: "archived",
+      invoice_number: "INV-ARCHIVED",
+      archived_at: "2026-08-20T09:00:00.000Z"
+    })], "INV-ARCHIVED", false]
+  ] as const)("renders the %s scope and applies its payment form visibility", (
+    scope,
+    invoices,
+    invoiceNumber,
+    paymentVisible
+  ) => {
+    const html = renderModal(group([...invoices]), { scope });
+
+    expect(html).toContain(invoiceNumber);
+    expect(html.includes("customer-payment-panel")).toBe(paymentVisible);
+  });
+
+  it.each(["active", "paid", "all", "archive"] as const)(
+    "puts the %s scope in both the details query key and request params",
+    async (scope) => {
+      const customer = group([debt()]);
+      mocks.api.mockResolvedValueOnce(customer);
+      renderModal(customer, { scope });
+
+      expect(mocks.queryOptions?.queryKey).toEqual([
+        "debts",
+        "customer-details",
+        expect.stringContaining("CUSTOMER_ID"),
+        scope
+      ]);
+      await mocks.queryOptions?.queryFn();
+      expect(mocks.api).toHaveBeenCalledWith("/debts/customer-details", {
+        params: expect.objectContaining({ scope })
+      });
+    }
+  );
 
   it("builds the oldest-first preview at cent precision", () => {
     const preview = buildCustomerDebtPreview([
@@ -209,6 +288,23 @@ describe("CustomerDebtDetailsModal", () => {
       { queryKey: ["reports"] }
     ]);
     expect(onPaid).toHaveBeenCalledWith(paymentResult);
+  });
+
+  it("closes a fully paid active scope before invalidation without another POST", async () => {
+    const onClose = vi.fn();
+    renderModal(group([debt()]), { onClose, scope: "active" });
+    const fullPaymentResult = {
+      ...paymentResult,
+      amount: 100000,
+      cashAmount: 100000
+    };
+
+    await mocks.mutationOptions?.onSuccess?.(fullPaymentResult);
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(mocks.api).not.toHaveBeenCalled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.invalidateQueries).toHaveBeenCalledTimes(4);
   });
 
   it("renders 50 invoices without an inline table detail row", () => {

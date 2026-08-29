@@ -275,7 +275,9 @@ export class DebtRepository {
     };
   }
 
-  async customerDetails(input: CustomerDebtIdentity & { archived: boolean }) {
+  async customerDetails(input: CustomerDebtIdentity & {
+    scope: "active" | "paid" | "all" | "archive";
+  }) {
     const values: unknown[] = [];
     let identityCondition: string;
 
@@ -288,6 +290,13 @@ export class DebtRepository {
         AND ${normalizedNameSql("d.customer_name")} = ${normalizedNameSql(`$${values.length - 1}`)}
         AND ${normalizedPhoneSql("d.phone")} = ${normalizedPhoneSql(`$${values.length}`)}`;
     }
+
+    const scopeCondition = {
+      active: "d.archived_at IS NULL AND d.remaining_amount > 0",
+      paid: "d.archived_at IS NULL AND d.remaining_amount = 0",
+      all: "d.archived_at IS NULL",
+      archive: "d.archived_at IS NOT NULL"
+    }[input.scope];
 
     const result = await query(
       `WITH matching AS (
@@ -305,7 +314,7 @@ export class DebtRepository {
          FROM debts d
          JOIN sales s ON s.id = d.sale_id
          WHERE ${identityCondition}
-           AND ${input.archived ? "d.archived_at IS NOT NULL" : "d.archived_at IS NULL"}
+           AND ${scopeCondition}
        )
        SELECT
          $${values.length + 1}::text AS identity_type,

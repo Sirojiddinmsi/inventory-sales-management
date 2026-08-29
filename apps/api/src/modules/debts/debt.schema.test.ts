@@ -128,14 +128,51 @@ describe("customer debt payment schema", () => {
     }).success).toBe(false);
   });
 
-  it("parses an explicit read-only details identity and archive scope", () => {
+  it("defaults read-only customer details to the active scope", () => {
     const result = customerDebtDetailsSchema.safeParse({
+      identityType: "CUSTOMER_ID",
+      customerId
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.scope).toBe("active");
+  });
+
+  it.each(["active", "paid", "all", "archive"] as const)(
+    "accepts the explicit %s customer details scope",
+    (scope) => {
+      const result = customerDebtDetailsSchema.safeParse({
+        identityType: "CUSTOMER_ID",
+        customerId,
+        scope
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.scope).toBe(scope);
+    }
+  );
+
+  it("keeps archived=true as a backward-compatible archive scope", () => {
+    const archived = customerDebtDetailsSchema.safeParse({
+      identityType: "CUSTOMER_ID",
+      customerId,
+      archived: "true"
+    });
+    const current = customerDebtDetailsSchema.safeParse({
       identityType: "CUSTOMER_ID",
       customerId,
       archived: "false"
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.archived).toBe(false);
+    expect(archived.success && archived.data.scope).toBe("archive");
+    expect(current.success && current.data.scope).toBe("active");
+  });
+
+  it("rejects an invalid customer details scope", () => {
+    expect(customerDebtDetailsSchema.safeParse({
+      identityType: "CUSTOMER_ID",
+      customerId,
+      scope: "overdue"
+    }).success).toBe(false);
   });
 });

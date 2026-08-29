@@ -17,11 +17,21 @@ import { Badge, Button, Input, Modal, Select, Textarea } from "./ui";
 
 type CustomerDebtDetailsModalProps = {
   group: DebtCustomerGroup | null;
-  archived: boolean;
+  scope: CustomerDebtDetailsScope;
   onClose: () => void;
   onOpenDebt: (debt: Debt) => void;
   onPaid?: (result: CustomerDebtPaymentResult) => void;
 };
+
+export type CustomerDebtDetailsScope = "active" | "paid" | "all" | "archive";
+
+export function customerDebtDetailsScopeForFilter(
+  filter: CustomerDebtDetailsScope | "overdue" | "partial"
+): CustomerDebtDetailsScope {
+  return filter === "paid" || filter === "all" || filter === "archive"
+    ? filter
+    : "active";
+}
 
 type CustomerPaymentDraft = {
   amount: string;
@@ -95,7 +105,7 @@ function paymentMethodText(method: DebtPaymentMethod, tr: (uz: string, ru: strin
 
 export function CustomerDebtDetailsModal({
   group,
-  archived,
+  scope,
   onClose,
   onOpenDebt,
   onPaid
@@ -107,7 +117,7 @@ export function CustomerDebtDetailsModal({
   const [result, setResult] = useState<CustomerDebtPaymentResult | null>(null);
   const submittingRef = useRef(false);
   const identityKey = group
-    ? `${group.identity_type}:${group.customer_key}:${group.phone_key}:${archived}`
+    ? `${group.identity_type}:${group.customer_key}:${group.phone_key}`
     : "closed";
 
   useEffect(() => {
@@ -124,22 +134,22 @@ export function CustomerDebtDetailsModal({
     setRequestId(newRequestId());
     setResult(null);
     submittingRef.current = false;
-  }, [identityKey]);
+  }, [identityKey, scope]);
 
   const details = useQuery({
-    queryKey: ["debts", "customer-details", identityKey],
+    queryKey: ["debts", "customer-details", identityKey, scope],
     queryFn: () => api<CustomerDebtDetails>("/debts/customer-details", {
       params: group?.identity_type === "CUSTOMER_ID"
         ? {
             identityType: "CUSTOMER_ID",
             customerId: group.customer_id,
-            archived
+            scope
           }
         : {
             identityType: "LEGACY",
             customerName: group?.customer_name,
             phone: group?.phone ?? "",
-            archived
+            scope
           }
     }),
     enabled: Boolean(group)
@@ -168,9 +178,10 @@ export function CustomerDebtDetailsModal({
     (amountCents === null || mixedCents === null || mixedCents !== amountCents);
   const activeDebts = sortedDebts.filter((debt) => !debt.archived_at && Number(debt.remaining_amount) > 0);
   const preview = buildCustomerDebtPreview(activeDebts, amountNumber);
+  const paymentAllowed = scope === "active" || scope === "all";
   const canSubmit = Boolean(
     customer &&
-    !archived &&
+    paymentAllowed &&
     amountCents !== null &&
     amountCents > 0 &&
     !overpayment &&
@@ -196,10 +207,13 @@ export function CustomerDebtDetailsModal({
       })
     }),
     onSuccess: async (data) => {
+      const closesActiveScope = scope === "active" &&
+        moneyCents(data.amount) === totalRemainingCents;
       setResult(data);
       setDraft(emptyDraft);
       setRequestId(newRequestId());
       toast.success(tr("Umumiy to‘lov taqsimlandi", "Общий платеж распределен"));
+      if (closesActiveScope) onClose();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["debts"] }),
         queryClient.invalidateQueries({ queryKey: ["debt"] }),
@@ -249,7 +263,7 @@ export function CustomerDebtDetailsModal({
           <Button variant="secondary" disabled={payment.isPending} onClick={closeModal}>
             {tr("Yopish", "Закрыть")}
           </Button>
-          {customer && !archived && Number(customer.total_remaining_amount) > 0 ? (
+          {customer && paymentAllowed && Number(customer.total_remaining_amount) > 0 ? (
             <Button loading={payment.isPending} disabled={!canSubmit} onClick={submitPayment}>
               <HandCoins size={16} />
               {tr("Umumiy to‘lovni saqlash", "Сохранить общий платеж")}
@@ -314,7 +328,7 @@ export function CustomerDebtDetailsModal({
             </div>
           </section>
 
-          {!archived && Number(customer.total_remaining_amount) > 0 ? (
+          {paymentAllowed && Number(customer.total_remaining_amount) > 0 ? (
             <section className="customer-payment-panel">
               <div className="modal-section-title">
                 <HandCoins size={17} />

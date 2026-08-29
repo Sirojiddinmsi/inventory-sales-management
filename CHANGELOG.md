@@ -1,4 +1,17 @@
 # CHANGELOG
+
+## 2026-08-29 - ISSUE-005: Faol qarzdor modalida faqat ochiq nakladnoylarni ko'rsatish
+
+- O'zgardi: mijoz qarzi tafsilotlari endpointi `active`, `paid`, `all` va `archive` scope'larini serverda validatsiya qilib, modalga aynan tanlangan filterga mos nakladnoylar, son va summalarni qaytaradi. Safe default `active`; eski `archived=true` so'rovi `archive` sifatida backward-compatible qoldi.
+- Sabab va yechim: mijozlar ro'yxati `active`da qoldig'i bor qarzlarni filtrlasa ham, details GET faqat identity/arxiv holatini tekshirgan va modal barcha qarzlarni render qilgan. Repository scope shartlari `active = non-archived + remaining > 0`, `paid = non-archived + remaining = 0`, `all = barcha non-archived`, `archive = faqat archived` qilib ajratildi; `overdue` va `partial` modali payment uchun serverdagi barcha ochiq eligible set bilan bir xil qolishi uchun `active` details scope'iga ulanadi.
+- Frontend: scope GET parametri va TanStack Query key tarkibiga kiritildi, shuning uchun filterlar orasida stale cache aralashmaydi. `paid`/`archive`da umumiy to'lov formasi yo'q; `active`/`all` preview faqat non-archived qoldig'i bor qarzlardan foydalanadi. Active scope'ni to'liq yopgan bitta muvaffaqiyatli submit modalni refetch 404 flashidan oldin toza yopadi va ikkinchi POST yubormaydi.
+- Ta'sir: `debt.schema`, `debt.repository`, ularning schema/disposable-DB integration testlari, `DebtsPage`, `CustomerDebtDetailsModal` va modal testlari. `payCustomer` transaction/allocation kodi, payment audit/idempotency, stock/FIFO, return, supplier flow, cost/profit, dashboard/report va style o'zgartirilmadi.
+- Testlar: fresh disposable `issue005_test` (`127.0.0.1`)da barcha 20 migration qo'llandi, bootstrap qayta yuritilganda no-op bo'ldi va `019` ledgerda bir marta qoldi; API 11 fayl/72 test, jumladan 10 DB integration test o'tdi; web 6 fayl/56 test o'tdi; monorepo typecheck, API/web production build, final root test va `git diff --check` o'tdi. Birinchi DB-enabled API urinishida testdan oldingi `JWT_SECRET` env guardi, keyingi final root urinishida to'xtagan disposable DB listener sabab suite fail bo'ldi; to'g'ri env va qayta ishga tushirilgan disposable listener bilan yakuniy run API 72/72 va web 56/56 o'tdi.
+- Migration/config/dependency: yo'q. ISSUE-005 production schema yoki ma'lumot yozuvini talab qilmaydi; production smoke faqat authenticated GET bo'lishi kerak.
+- Invariantlar: UUID customer isolation va faqat `customer_id IS NULL` legacy name/phone fallback saqlandi. Details GET read-only; exact-cent FIFO payment transactioni, overpay rollback, requestId idempotency, `paid_amount = SUM(debt_payments.amount)`, sale `payment_type=DEBT`, stock/FIFO/return/profit/report oqimlari o'zgarmadi va mavjud integration regressiyalaridan o'tdi.
+- Rollback: shu sakkiz faylli ISSUE-005 commitini revert qilish va API/webni oldingi image/source backupiga qaytarish kifoya; database rollback yoki migration talab qilinmaydi.
+- Ma'lum cheklov: foydalanuvchi lokal browser demo bosqichini bekor qildi; responsive holat va interactionlar avtomatik web testlari bilan tekshirildi, lokal manual browser smoke passed deb belgilanmadi.
+
 ## 2026-08-27 — ISSUE-004: Mijoz qarzlarini modalda ko‘rish va umumiy to‘lovni taqsimlash
 
 - O‘zgardi: mijoz qatori `Eye` actioni endi inline `<tr>` o‘rniga compact qarz modalini ochadi; modal serverdan identity bo‘yicha barcha tegishli nakladnoylarni olib, jami/to‘langan/qoldiq, muddat/holat, individual nakladnoy actionlari va aktiv mijoz uchun bitta umumiy to‘lov formasini ko‘rsatadi.

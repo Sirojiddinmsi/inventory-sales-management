@@ -449,6 +449,117 @@ describeDatabase("DebtRepository customer payment integration (disposable DB onl
     )).rows[0].count)).toBe(0);
   });
 
+  it("scopes UUID and normalized legacy customer details to active, paid, all, and archive sets", async () => {
+    const scopeToken = randomUUID().slice(0, 8);
+    const scopeName = `Scope ${scopeToken}`;
+    const scopePhone = "+998 90 505 05 05";
+    const customerId = await createCustomer(scopeName, scopePhone);
+    const uuidFixture = await createDebtSet({
+      amounts: [100000, 200000, 300000, 400000],
+      customerId,
+      customerName: scopeName,
+      phone: scopePhone,
+      createdBase: "2040-01-01T08:00:00.000Z"
+    });
+    const legacyFixture = await createDebtSet({
+      amounts: [110000, 210000, 310000, 410000],
+      customerId: null,
+      customerName: `  ${scopeName.toUpperCase().replace(" ", "   ")}  `,
+      phone: "998905050505",
+      createdBase: "2040-02-01T08:00:00.000Z"
+    });
+
+    await repository.pay({
+      debtId: uuidFixture.debtIds[0]!,
+      amount: 100000,
+      paymentMethod: "CASH",
+      receivedBy: userId
+    });
+    await repository.pay({
+      debtId: uuidFixture.debtIds[1]!,
+      amount: 50000,
+      paymentMethod: "CARD",
+      receivedBy: userId
+    });
+    await repository.pay({
+      debtId: legacyFixture.debtIds[0]!,
+      amount: 110000,
+      paymentMethod: "TRANSFER",
+      receivedBy: userId
+    });
+    await repository.pay({
+      debtId: legacyFixture.debtIds[1]!,
+      amount: 60000,
+      paymentMethod: "CASH",
+      receivedBy: userId
+    });
+    await fixturePool.query(
+      `UPDATE debts
+       SET archived_at = NOW(), archived_by = $2, archive_reason = 'issue005 scope fixture'
+       WHERE id = ANY($1::uuid[])`,
+      [[uuidFixture.debtIds[3], legacyFixture.debtIds[3]], userId]
+    );
+
+    const identities = [
+      {
+        identity: { identityType: "CUSTOMER_ID" as const, customerId },
+        fixture: uuidFixture,
+        expected: {
+          active: { count: 2, total: 500000, paid: 50000, remaining: 450000 },
+          paid: { count: 1, total: 100000, paid: 100000, remaining: 0 },
+          all: { count: 3, total: 600000, paid: 150000, remaining: 450000 },
+          archive: { count: 1, total: 400000, paid: 0, remaining: 400000 }
+        }
+      },
+      {
+        identity: {
+          identityType: "LEGACY" as const,
+          customerName: scopeName.toLowerCase(),
+          phone: "+998 (90) 505-05-05"
+        },
+        fixture: legacyFixture,
+        expected: {
+          active: { count: 2, total: 520000, paid: 60000, remaining: 460000 },
+          paid: { count: 1, total: 110000, paid: 110000, remaining: 0 },
+          all: { count: 3, total: 630000, paid: 170000, remaining: 460000 },
+          archive: { count: 1, total: 410000, paid: 0, remaining: 410000 }
+        }
+      }
+    ];
+
+    for (const { identity, fixture, expected } of identities) {
+      for (const scope of ["active", "paid", "all", "archive"] as const) {
+        const details = await repository.customerDetails({ ...identity, scope });
+        const expectedTotals = expected[scope];
+        const expectedIds = scope === "active"
+          ? fixture.debtIds.slice(1, 3)
+          : scope === "paid"
+            ? fixture.debtIds.slice(0, 1)
+            : scope === "all"
+              ? fixture.debtIds.slice(0, 3)
+              : fixture.debtIds.slice(3, 4);
+
+        expect(details).toMatchObject({
+          debt_count: expectedTotals.count,
+          total_amount: expectedTotals.total,
+          total_paid_amount: expectedTotals.paid,
+          total_remaining_amount: expectedTotals.remaining
+        });
+        expect(details.debts.map((debt: { id: string }) => debt.id)).toEqual(expectedIds);
+        if (scope === "active") {
+          expect(details.debts.every((debt: { remaining_amount: number }) =>
+            Number(debt.remaining_amount) > 0)).toBe(true);
+        } else if (scope === "paid") {
+          expect(details.debts.every((debt: { remaining_amount: number }) =>
+            Number(debt.remaining_amount) === 0)).toBe(true);
+        } else if (scope === "archive") {
+          expect(details.debts.every((debt: { archived_at: string | null }) =>
+            debt.archived_at !== null)).toBe(true);
+        }
+      }
+    }
+  });
+
   it("isolates UUID customers from same-name customers and normalized legacy debts", async () => {
     const identityToken = randomUUID().slice(0, 8);
     const identityName = `Identity ${identityToken}`;
@@ -498,7 +609,7 @@ describeDatabase("DebtRepository customer payment integration (disposable DB onl
     const details = await repository.customerDetails({
       identityType: "CUSTOMER_ID",
       customerId: customerA,
-      archived: false
+      scope: "all"
     });
     expect(details.debt_count).toBe(2);
     expect(details.debts.map((debt: { id: string }) => debt.id)).toEqual(fixtureA.debtIds.slice(0, 2));

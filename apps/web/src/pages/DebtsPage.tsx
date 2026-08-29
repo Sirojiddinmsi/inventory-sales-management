@@ -2,7 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, CreditCard, Edit3, Eye, HandCoins, Phone, Trash2, Undo2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { CustomerDebtDetailsModal } from "../components/CustomerDebtDetailsModal";
+import {
+  customerDebtDetailsScopeForFilter,
+  CustomerDebtDetailsModal,
+} from "../components/CustomerDebtDetailsModal";
 import {
   Badge,
   Button,
@@ -244,6 +247,7 @@ export function DebtsPage() {
   const current = details.data ?? selected;
   const remaining = Number(current?.remaining_amount ?? 0);
   const isArchiveView = filter === "archive";
+  const customerDetailsScope = customerDebtDetailsScopeForFilter(filter);
   const mixedTotal =
     Number(cashAmount || 0) + Number(cardAmount || 0) + Number(transferAmount || 0);
   const editMixedTotal =
@@ -499,7 +503,7 @@ export function DebtsPage() {
 
       <CustomerDebtDetailsModal
         group={customerModal}
-        archived={isArchiveView}
+        scope={customerDetailsScope}
         onClose={() => setCustomerModal(null)}
         onOpenDebt={(debt) => {
           setCustomerModal(null);

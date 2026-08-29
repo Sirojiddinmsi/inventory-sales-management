@@ -136,10 +136,14 @@ export const customerDebtIdentitySchema = z.object(customerIdentityFields)
 
 export const customerDebtDetailsSchema = z.object({
   ...customerIdentityFields,
+  scope: z.enum(["active", "paid", "all", "archive"]).optional(),
   archived: z.enum(["true", "false"])
     .transform((value) => value === "true")
-    .default(false)
-}).superRefine(validateCustomerIdentity);
+    .optional()
+}).superRefine(validateCustomerIdentity).transform(({ archived, ...details }) => ({
+  ...details,
+  scope: details.scope ?? (archived ? "archive" : "active")
+}));
 
 export const customerDebtPaymentSchema = debtPaymentSchema.safeExtend({
   requestId: z.uuid(),
