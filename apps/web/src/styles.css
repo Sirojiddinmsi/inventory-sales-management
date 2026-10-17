@@ -1078,6 +1078,8 @@ td strong { color: #1e293b; font-size: 12px; }
 .customer-select-trigger strong, .customer-select-trigger small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .customer-select-trigger small { margin-top: 2px; color: var(--muted); font-size: 10px; }
 .customer-picker-results { max-height: min(50vh, 420px); }
+.customer-picker-row { display: flex; align-items: center; gap: 6px; }
+.customer-picker-row > .product-picker-item { flex: 1 1 auto; min-width: 0; }
 .confirm-message { margin: 0; color: #475569; font-size: 13px; line-height: 1.7; }
 @keyframes modal-in { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 

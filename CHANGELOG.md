@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-17 - Mijozni tahrirlash (Sotuv oynasi)
+
+- O'zgardi: Sotuv oynasida "Mijozni tanlash" ro'yxatida har bir mijoz yonida qalam tugmasi; bosilsa ism, telefon, manzil va izohni tahrirlash oynasi ochiladi.
+- Sabab: yangi mijoz yaratsa bo'lardi, lekin tahrirlab bo'lmasdi (backend `PATCH /customers/:id` bor edi, frontend tugmasi yo'q edi).
+- Ta'sir: faqat `SalesPage.tsx` va `styles.css`. Faqat `customers` kartochkasi yangilanadi; eski sotuv/qarzdagi ism va telefon snapshot o'zgarmaydi. Backend, migratsiya, FIFO, qarz, hisobot o'zgarmadi.
+- Testlar: `npm run typecheck` - o'tdi; `npm test` - API 62 o'tdi/10 o'tkazib yuborildi (DB integratsiya), web 56/56 o'tdi. Qo'lda: eski lokal nusxada brauzer orqali yaratish -> tahrirlash -> ro'yxatda yangi nom ko'rindi. Toza `main` asosidagi nusxada qo'lda brauzer testi hali o'tkazilmagan.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+- Cheklov: takroriy telefon (409) xabari va mobil ko'rinish qo'lda tekshirilmagan.
+
 ## 2026-08-29 - ISSUE-005: Faol qarzdor modalida faqat ochiq nakladnoylarni ko'rsatish
 
 - O'zgardi: mijoz qarzi tafsilotlari endpointi `active`, `paid`, `all` va `archive` scope'larini serverda validatsiya qilib, modalga aynan tanlangan filterga mos nakladnoylar, son va summalarni qaytaradi. Safe default `active`; eski `archived=true` so'rovi `archive` sifatida backward-compatible qoldi.
