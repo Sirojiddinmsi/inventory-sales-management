@@ -5,9 +5,10 @@
 - O'zgardi: `apps/web/nginx.conf` ga `client_max_body_size 25m;` (443 server blokida).
 - Sabab: nginx standart 1 MB dan kattaroq so'rovni `413` bilan rad etadi; telefon rasmi (~3.7 MB) API'ga yetib bormagan (server logi: `client intended to send too large body: 3731864 bytes`). Frontend 413 javobini umumiy "Server bilan bog'lanishda xatolik" deb ko'rsatgan. API chegarasi 4 fayl x 5 MB, shuning uchun 25 MB yetarli.
 - Ta'sir: faqat nginx (web konteyner) sozlamasi; API, baza, kod o'zgarmadi. Mahsulot rasmi yuklash, kichik so'rovlar o'zgarmaydi.
-- Testlar: production logidagi 413 so'rovi tahlil qilindi. Deploydan keyin `nginx -t` va haqiqiy rasm bilan sinov rejalashtirilgan (hali bajarilmagan).
+- Testlar: production logidagi 413 so'rovi tahlil qilindi. Yangi image'da `nginx -t` o'tdi (sertifikatlar mount qilingan holda). Deploydan keyin autentifikatsiyasiz 4 MB POST `/api/v1/products/images` → HTTP 401 (API'ga yetdi; avval nginx 413 qaytarardi). Telefondan haqiqiy rasm bilan sinash egasiga qoldi.
 - Migration/config: yo'q (nginx config web image ichida).
-- Rollback: `tikuv-market-web` oldingi image'iga qaytarish.
+- **Production'ga chiqarildi: 2026-10-17 15:12 UTC**, `main` = `c0a434e`. Faqat `web` image (`tikuv-market-web:nginx-upload-c0a434e`); `api`, `db` tegilmadi. Backup: `inventory_sales-20261017T151148Z.dump` (tekshirilgan).
+- Rollback: `docker tag tikuv-market-web:rollback-nginx-upload-20261017T151148Z tikuv-market-web:latest && docker compose -f docker-compose.prod.yml up -d --no-deps web`; eski config `/var/backups/tikuv-market/releases/nginx-upload-before-20261017T151148Z/`.
 
 ## 2026-10-17 - Mijozni tahrirlash (Sotuv oynasi)
 
