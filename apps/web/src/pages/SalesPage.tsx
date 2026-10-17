@@ -4,6 +4,7 @@ import {
   Search,
   Download,
   Edit3,
+  Pencil,
   Plus,
   ReceiptText,
   RotateCcw,
@@ -195,6 +196,7 @@ export function SalesPage() {
   const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newCustomerAddress, setNewCustomerAddress] = useState("");
   const [newCustomerNote, setNewCustomerNote] = useState("");
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
   const [paymentType, setPaymentType] = useState<PaymentType>("CASH");
   const [soldAt, setSoldAt] = useState(toDateTimeLocalInputValue(new Date().toISOString()));
   const [saleDiscount, setSaleDiscount] = useState("0");
@@ -385,6 +387,54 @@ export function SalesPage() {
       setNewCustomerNote("");
       void queryClient.invalidateQueries({ queryKey: ["customers"] });
       toast.success(tr("Yangi mijoz yaratildi", "Новый клиент создан"));
+    },
+    onError: (error) => {
+      const duplicate = error.message.includes("phone number already exists");
+      toast.error(
+        duplicate
+          ? tr("Bu telefon raqamli mijoz allaqachon mavjud", "Клиент с этим номером телефона уже существует")
+          : error.message
+      );
+    }
+  });
+
+  const closeCustomerForm = () => {
+    setNewCustomerOpen(false);
+    setEditingCustomerId(null);
+    setNewCustomerName("");
+    setNewCustomerPhone("");
+    setNewCustomerAddress("");
+    setNewCustomerNote("");
+  };
+
+  const openEditCustomer = (customer: Contact) => {
+    setEditingCustomerId(customer.id);
+    setNewCustomerName(customer.name);
+    setNewCustomerPhone(customer.phone ?? "");
+    setNewCustomerAddress(customer.address ?? "");
+    setNewCustomerNote(customer.note ?? "");
+    setCustomerPickerOpen(false);
+    setNewCustomerOpen(true);
+  };
+
+  const updateCustomer = useMutation({
+    mutationFn: () => api<Contact>(`/customers/${editingCustomerId}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: newCustomerName.trim(),
+        phone: newCustomerPhone.trim() || null,
+        address: newCustomerAddress.trim() || null,
+        note: newCustomerNote.trim() || null
+      })
+    }),
+    onSuccess: (customer) => {
+      if (customer.id === customerId) {
+        setCustomerName(customer.name);
+        setCustomerPhone(customer.phone ?? "");
+      }
+      closeCustomerForm();
+      void queryClient.invalidateQueries({ queryKey: ["customers"] });
+      toast.success(tr("Mijoz ma’lumotlari yangilandi", "Данные клиента обновлены"));
     },
     onError: (error) => {
       const duplicate = error.message.includes("phone number already exists");
@@ -1329,17 +1379,27 @@ export function SalesPage() {
               <div className="product-picker-empty">{tr("Mijozlar qidirilmoqda...", "Поиск клиентов...")}</div>
             ) : customers.data?.data.length ? (
               customers.data.data.map((customer) => (
-                <button
-                  key={customer.id}
-                  type="button"
-                  className={`product-picker-item ${customerId === customer.id ? "active" : ""}`}
-                  onClick={() => selectCustomer(customer.id)}
-                >
-                  <span>
-                    <strong>{customer.name}</strong>
-                    <small>{customer.phone || tr("Telefon ko‘rsatilmagan", "Телефон не указан")}</small>
-                  </span>
-                </button>
+                <div key={customer.id} className="customer-picker-row">
+                  <button
+                    type="button"
+                    className={`product-picker-item ${customerId === customer.id ? "active" : ""}`}
+                    onClick={() => selectCustomer(customer.id)}
+                  >
+                    <span>
+                      <strong>{customer.name}</strong>
+                      <small>{customer.phone || tr("Telefon ko‘rsatilmagan", "Телефон не указан")}</small>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => openEditCustomer(customer)}
+                    aria-label={tr("Mijozni tahrirlash", "Редактировать клиента")}
+                    title={tr("Mijozni tahrirlash", "Редактировать клиента")}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                </div>
               ))
             ) : (
               <div className="product-picker-empty">{tr("Mijoz topilmadi", "Клиент не найден")}</div>
@@ -1350,21 +1410,26 @@ export function SalesPage() {
 
       <Modal
         open={newCustomerOpen}
-        title={tr("Yangi mijoz", "Новый клиент")}
-        description={tr(
-          "Mijoz savdoga avtomatik tanlanadi. Kiritilgan sotuv ma’lumotlari saqlanib qoladi.",
-          "Новый клиент будет автоматически выбран. Данные текущей продажи сохранятся."
-        )}
-        onClose={() => setNewCustomerOpen(false)}
+        title={editingCustomerId ? tr("Mijozni tahrirlash", "Редактировать клиента") : tr("Yangi mijoz", "Новый клиент")}
+        description={editingCustomerId
+          ? tr(
+            "Faqat mijoz kartochkasi yangilanadi. Oldingi sotuv va qarz yozuvlaridagi ism o‘zgarmaydi.",
+            "Обновляется только карточка клиента. Имя в прошлых продажах и долгах не меняется."
+          )
+          : tr(
+            "Mijoz savdoga avtomatik tanlanadi. Kiritilgan sotuv ma’lumotlari saqlanib qoladi.",
+            "Новый клиент будет автоматически выбран. Данные текущей продажи сохранятся."
+          )}
+        onClose={closeCustomerForm}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setNewCustomerOpen(false)}>
+            <Button variant="secondary" onClick={closeCustomerForm}>
               {tr("Bekor qilish", "Отмена")}
             </Button>
             <Button
-              loading={createCustomer.isPending}
+              loading={editingCustomerId ? updateCustomer.isPending : createCustomer.isPending}
               disabled={newCustomerName.trim().length < 2}
-              onClick={() => createCustomer.mutate()}
+              onClick={() => (editingCustomerId ? updateCustomer.mutate() : createCustomer.mutate())}
             >
               {tr("Mijozni saqlash", "Сохранить клиента")}
             </Button>
