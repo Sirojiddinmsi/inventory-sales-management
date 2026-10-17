@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-10-17 - Telefondan mahsulot rasmi yuklashda "Server bilan bog'lanishda xatolik"
+
+- O'zgardi: `apps/web/nginx.conf` ga `client_max_body_size 25m;` (443 server blokida).
+- Sabab: nginx standart 1 MB dan kattaroq so'rovni `413` bilan rad etadi; telefon rasmi (~3.7 MB) API'ga yetib bormagan (server logi: `client intended to send too large body: 3731864 bytes`). Frontend 413 javobini umumiy "Server bilan bog'lanishda xatolik" deb ko'rsatgan. API chegarasi 4 fayl x 5 MB, shuning uchun 25 MB yetarli.
+- Ta'sir: faqat nginx (web konteyner) sozlamasi; API, baza, kod o'zgarmadi. Mahsulot rasmi yuklash, kichik so'rovlar o'zgarmaydi.
+- Testlar: production logidagi 413 so'rovi tahlil qilindi. Deploydan keyin `nginx -t` va haqiqiy rasm bilan sinov rejalashtirilgan (hali bajarilmagan).
+- Migration/config: yo'q (nginx config web image ichida).
+- Rollback: `tikuv-market-web` oldingi image'iga qaytarish.
+
 ## 2026-10-17 - Mijozni tahrirlash (Sotuv oynasi)
 
 - O'zgardi: Sotuv oynasida "Mijozni tanlash" ro'yxatida har bir mijoz yonida qalam tugmasi; bosilsa ism, telefon, manzil va izohni tahrirlash oynasi ochiladi.
