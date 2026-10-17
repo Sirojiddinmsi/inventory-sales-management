@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Tikuv Market PostgreSQL backup every six hours
+
+[Timer]
+OnCalendar=*-*-* 00,06,12,18:15:00 Asia/Tashkent
+Persistent=true
+RandomizedDelaySec=5min
+AccuracySec=1min
+Unit=tikuv-market-db-backup.service
+
+[Install]
+WantedBy=timers.target
