@@ -14,6 +14,16 @@
 - Zaxira papkadagi `02_Databases/*.dump` shu backuplardan.
 - **Backup faqat shu serverning o'zida** — server o'lsa yo'qoladi. ⚠️ Serverdan tashqariga nusxa (boshqa joy) hozircha avtomatik emas — `OPEN_ISSUES.md`.
 
+## Oxirgi deploy: 2026-10-17 ✅ (namuna, shu tartibda takrorlang)
+Qilingan qadamlar (frontend-only o'zgarish uchun, `main` = `3a97194`):
+1. Server holati: `docker ps`, `/health`, disk; serverdagi fayl `main` (oldingi commit) bilan bir xilligini sha256 bilan tekshirish (CR/LF farqini `tr -d '\r'` bilan e'tiborsiz qoldirib).
+2. Backup: `/usr/local/sbin/tikuv-market-db-backup` → dump + `sha256sum -c`. Rollback: `docker tag tikuv-market-web:latest tikuv-market-web:rollback-<nom>-<UTC>`; eski fayllarni `/var/backups/tikuv-market/releases/<nom>-before-<UTC>/` ga `cp --parents`.
+3. Faqat o'zgargan fayllarni `git show main:<fayl>` (LF) → `scp` → serverda sha256 tekshirish.
+4. `cd /opt/tikuv-market && docker compose -f docker-compose.prod.yml build web` → `docker tag ...:latest ...:<nom>-<sha>` → `docker compose -f docker-compose.prod.yml up -d --no-deps web` (api: `build api` + `up -d --no-deps api`; migratsiyali bo'lsa avval backup!).
+5. `echo <sha> > /opt/tikuv-market/DEPLOYED_COMMIT`.
+6. Smoke: `curl https://95.216.184.39/` (200, TLS), `/health`, yangi bundle ichida belgi (`grep` JS chunk), `docker logs tikuv-market-api-1 --since 10m`.
+- SSH: `ssh -i <kalit> root@95.216.184.39` (kalit `04_Server_Access_Keys/.ssh/`; `known_hosts` bilan, `StrictHostKeyChecking=yes`).
+
 ## Serverda tekshirilgan holat (2026-10-17, faqat o'qish) ✅
 - Server manbasi `main` (`96e7a93`) bilan bir xil (177 fayl solishtirildi; farq faqat ikkita eski `debt.*test.ts` va CR/LF qator oxirlari).
 - Ishlayotgan image'lar: `tikuv-market-web|api:issue005-96e7a93` (= `:latest`). Eski image'lar `release-issue004-5de0067-...`, `rollback-issue005-<UTC>` teglari bilan saqlangan → **rollback = eski image'ni `:latest` qilib qayta ko'tarish** (build shart emas).
