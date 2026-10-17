@@ -8,7 +8,10 @@
 - Testlar: `npm run typecheck` - o'tdi; `npm test` - API 62 o'tdi/10 o'tkazib yuborildi (DB integratsiya), web 56/56 o'tdi. Qo'lda: eski lokal nusxada brauzer orqali yaratish -> tahrirlash -> ro'yxatda yangi nom ko'rindi. Toza `main` asosidagi nusxada qo'lda brauzer testi hali o'tkazilmagan.
 - Migration/config: yo'q.
 - Rollback: shu commitni revert qilish.
-- Cheklov: takroriy telefon (409) xabari va mobil ko'rinish qo'lda tekshirilmagan.
+- Cheklov: (bartaraf etildi) takroriy telefon (409) va telefon ko'rinishi toza `main` nusxasida lokalda qo'lda tekshirildi.
+- **Production'ga chiqarildi: 2026-10-17 14:39 UTC**, GitHub `main` = `3a97194` (PR #1 mijoz tahrirlash, PR #2 hujjatlar). Faqat `web` image qayta qurildi (`tikuv-market-web:customer-edit-3a97194`); `api` va `db` tegilmadi, migratsiya yo'q.
+- Deploy tekshiruvi: sayt 200 (TLS to'g'ri), `/health` ok (schema `019_customer_debt_payment_batches`), yangi `SalesPage` chunk'ida "Mijozni tahrirlash" bor, API loglarida xato yo'q; egasi saytda qo'lda tekshirib tasdiqladi.
+- Rollback: backup `inventory_sales-20261017T143718Z.dump` (sha256 tekshirilgan); eski image `tikuv-market-web:rollback-customer-edit-20261017T143718Z` (= `issue005-96e7a93`); eski fayllar `/var/backups/tikuv-market/releases/customer-edit-before-20261017T143718Z/`. Qaytarish: `docker tag tikuv-market-web:rollback-customer-edit-20261017T143718Z tikuv-market-web:latest && docker compose -f docker-compose.prod.yml up -d --no-deps web`.
 
 ## 2026-08-29 - ISSUE-005: Faol qarzdor modalida faqat ochiq nakladnoylarni ko'rsatish
 

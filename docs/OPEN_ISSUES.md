@@ -3,7 +3,7 @@
 Yangilangan: 2026-10-17. Bajarilganini o'chirmang — "Hal qilindi" bo'limiga o'tkazing.
 
 ## Egasi bergan topshiriqlar (kamchiliklar)
-1. **Mijozni tahrirlash.** Sotuv oynasida yangi mijoz yaratsa bo'ladi, tahrirlab bo'lmaydi (backend `PATCH /customers/:id` bor, frontend tugmasi yo'q). Taklif: mijoz tanlash ro'yxatida qalam tugmasi + tahrirlash modali (faqat `customers` kartochkasi; eski sotuv/qarzdagi ism snapshot o'zgarmaydi). *Holat: lokalda yozilib ishlashi tekshirilgan, productionga chiqmagan; patch `00_CLEAN_PROJECT/_salvage/old-local-uncommitted.diff` ichidagi `SalesPage.tsx` qismida — toza `main` ustiga qayta qo'llash kerak.*
+(hozircha ochiq topshiriq yo'q — "Hal qilindi" bo'limiga qarang)
 
 ## Ma'lum xavflar / texnik qarz
 - **Backup faqat serverning o'zida.** Server yoki disk yo'qolsa DB ham yo'qoladi. Taklif: kunlik tashqi nusxa (masalan boshqa joyga shifrlangan). Hozir ixtiyoriy qo'lda nusxa (`02_Databases`).
@@ -32,4 +32,5 @@ Yangilangan: 2026-10-17. Bajarilganini o'chirmang — "Hal qilindi" bo'limiga o'
 | Render? | **Aniqlandi:** 2026-07-18 da baza Render'dan Hetzner'ga ko'chirilgan (`render-inventory-sales-*.dump` shu uchun). Render xizmatlari hozir ishlatilmaydi, lekin Render akkaunti/DB hali o'chirilganmi — **bilmaymiz**. Egasi Render panelida tekshirib, keraksiz bo'lsa o'chirishi tavsiya (parol/ma'lumot saqlanib qolmasin). `render.yaml` repoda tarixiy fayl sifatida qoldi. |
 
 ## Hal qilindi
-- (hozircha yo'q)
+- 2026-10-17: Mijozni tahrirlash (Sotuv oynasi, qalam tugmasi) — productionga chiqarildi (`main` `3a97194`, PR #1).
+- 2026-10-17: Production kodi, GitHub `main` va hujjatlar bir-biriga moslashtirildi; `docs/`, `AGENTS.md`, `deploy/` qo'shildi (PR #2).
