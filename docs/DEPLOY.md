@@ -14,6 +14,13 @@
 - Zaxira papkadagi `02_Databases/*.dump` shu backuplardan.
 - **Backup faqat shu serverning o'zida** — server o'lsa yo'qoladi. ⚠️ Serverdan tashqariga nusxa (boshqa joy) hozircha avtomatik emas — `OPEN_ISSUES.md`.
 
+## Serverda tekshirilgan holat (2026-10-17, faqat o'qish) ✅
+- Server manbasi `main` (`96e7a93`) bilan bir xil (177 fayl solishtirildi; farq faqat ikkita eski `debt.*test.ts` va CR/LF qator oxirlari).
+- Ishlayotgan image'lar: `tikuv-market-web|api:issue005-96e7a93` (= `:latest`). Eski image'lar `release-issue004-5de0067-...`, `rollback-issue005-<UTC>` teglari bilan saqlangan → **rollback = eski image'ni `:latest` qilib qayta ko'tarish** (build shart emas).
+- Konvensiya: har release oldidan `/var/backups/tikuv-market/releases/<issueNNN>-before-<UTC>/` ga eski fayllar, `.deploy-backups/<UTC>-<nom>/` ga image ID, image'ga `issueNNN-<sha>` va `rollback-...` teglari qo'yilgan.
+- `/health` → `ok`, schema `019_customer_debt_payment_batches`. DB backup oxirgi marta 13:17 UTC (har 6 soatda, `/var/backups/tikuv-market/postgres`). Disk 29% band.
+- Konteynerlar: `db` (healthy), `api` (up), `web` (up; healthcheck noto'g'ri `unhealthy` ko'rsatadi, `OPEN_ISSUES.md` ga qarang).
+
 ## Release jarayoni (qo'lda) ⚠️
 Oldingi deploylar (ombor.md, `.deploy-backups/`) asosida:
 1. Lokal: branch → o'zgarish → `npm run typecheck && npm test && npm run build` → egasi lokalda tasdiqlaydi.
