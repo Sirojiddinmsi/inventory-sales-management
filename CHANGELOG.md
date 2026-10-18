@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-10-18 - Mahsulotlar ro'yxati alifbo bo'yicha
+
+- O'zgardi: Mahsulotlar sahifasi (va "Excelga yuklash") endi nomi bo'yicha A→Z tartiblangan.
+- Sabab: sahifa serverdan `sortBy: "id"` so'ragan; `id` tasodifiy UUID, shuning uchun tartib alifbo bo'yicha emas edi. Server `name` bo'yicha tartiblashni avvaldan qo'llab-quvvatlaydi (Sotuv va Kirim oynalari shunday ishlatadi).
+- Ta'sir: faqat `apps/web/src/pages/ProductsPage.tsx` (2 qator: ro'yxat so'rovi va Excel eksport). API, baza o'zgarmadi. Tartib butun ro'yxat bo'yicha (sahifalar orasida ham), serverda hisoblanadi.
+- Eslatma: tartiblash bazaning kollatsiyasiga bog'liq. Productionda `en_US.utf8`: avval lotin harflari (A-Z), keyin kirill (А-Я); katta-kichik harf farqi hisobga olinmaydi.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda 8 ta mahsulot (lotin+kirill) alifbo bo'yicha chiqdi. Productionda hali sinalmagan.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish va `web` image'ni qayta qurish.
+
 ## 2026-10-17 - Telefondan mahsulot rasmi yuklashda "Server bilan bog'lanishda xatolik"
 
 - O'zgardi: `apps/web/nginx.conf` ga `client_max_body_size 25m;` (443 server blokida).

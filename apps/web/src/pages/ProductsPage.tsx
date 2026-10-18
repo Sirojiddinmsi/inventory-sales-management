@@ -283,7 +283,7 @@ export function ProductsPage() {
           categoryId,
           location: locationFilter,
           lowStock: lowStock || undefined,
-          sortBy: "id",
+          sortBy: "name",
           sortOrder: "asc"
         }
       })
@@ -956,7 +956,7 @@ export function ProductsPage() {
         categoryId,
         location: locationFilter,
         lowStock: lowStock || undefined,
-        sortBy: "id",
+        sortBy: "name",
         sortOrder: "asc",
         locale: language
       });
