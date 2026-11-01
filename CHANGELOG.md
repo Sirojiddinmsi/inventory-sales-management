@@ -7,7 +7,8 @@
 - Ta'sir: faqat `apps/web/src/styles.css`, 620px dan kichik ekranlardagi `.table-wrap` qoidalari (Mahsulotlar, Sotuv, Kirim, Qarz, Xarajat va boshqa jadvallar). Desktop o'zgarmadi.
 - Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56). Lokal brauzerda 375 px da: uzun nomli mahsulot bilan hujjat kengligi 601 → 375; kartalar 23–352 px (ichkarida); Sotuv va Kirim sahifalari ham ekran ichida. Qarz sahifasida lokalda ma'lumot yo'q (tekshirilmagan). Haqiqiy iPhone'da sinalmagan.
 - Migration/config: yo'q.
-- Rollback: shu commitni revert qilish.
+- **Production'ga chiqarildi: 2026-11-01 13:36 UTC**, `main` = `2847b3e`. Faqat `web` image (`tikuv-market-web:mobile-table-2847b3e`); `api`, `db` tegilmadi. Backup: `inventory_sales-20261101T133504Z.dump` (tekshirilgan). Sayt 200, `/health` ok.
+- Rollback: `docker tag tikuv-market-web:rollback-mobile-table-20261101T133504Z tikuv-market-web:latest && docker compose -f docker-compose.prod.yml up -d --no-deps web`; eski fayl `/var/backups/tikuv-market/releases/mobile-table-before-20261101T133504Z/`.
 
 ## 2026-11-01 - Telefonda "С / По" (Dan / Gacha) sana maydonlari yonga cho'zilib ketishi
 
