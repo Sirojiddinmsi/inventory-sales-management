@@ -1312,6 +1312,10 @@ td strong { color: #1e293b; font-size: 12px; }
   .filters .search-input { width: 100%; }
   .input, .button, .icon-button, .sale-product-trigger, .checkbox-filter { min-height: 44px; font-size: 16px; }
   select.input, input.input, textarea.input { font-size: 16px; }
+  /* iOS Safari sizes native date inputs by their content and pushes them past the card edge */
+  .filters .field, .report-filters .field { min-width: 0; }
+  input.input[type="date"], input.input[type="datetime-local"], input.input[type="time"] { -webkit-appearance: none; appearance: none; display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; text-align: left; }
+  input.input[type="date"]::-webkit-date-and-time-value, input.input[type="datetime-local"]::-webkit-date-and-time-value, input.input[type="time"]::-webkit-date-and-time-value { text-align: left; min-height: 1.5em; }
   .field-label, .sale-mobile-label { font-size: 11px; }
   .page-header h1 { font-size: 22px; }
   .page-header p { font-size: 12px; line-height: 1.5; }
