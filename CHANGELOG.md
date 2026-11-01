@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-11-01 - Sayt faqat ruscha, UZ/RU tugmasi olib tashlandi
+
+- O'zgardi: yuqori o'ng burchak (va kirish sahifasi)dagi UZ/RU tugmasi yo'q; sayt hamma uchun doim ruscha. Telefonda oldin saqlangan "UZ" tanlovi ham RU ga o'tadi (lokalda `inventory.language=uz` qo'yib tekshirildi).
+- Qanday: `I18nProvider` ga `forcedLanguage` parametri qo'shildi (`main.tsx` da `"ru"`), `LanguageSwitch` shunda `null` qaytaradi. Tugmani qaytarish uchun `main.tsx` dagi `forcedLanguage="ru"` ni olib tashlash yetarli. `DataTable` dagi "yuklanmoqda / topilmadi" yozuvlari endi tarjima qilinadi (oldin faqat o'zbekcha edi).
+- Ta'sir: `apps/web/src/contexts/I18nContext.tsx`, `main.tsx`, `components/ui.tsx`. API, baza o'zgarmadi. Excel eksport tili ham ruscha bo'ladi (`locale: language`).
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56; testlar o'zbekcha yozuvlarni tekshiradi, shuning uchun majburlash faqat `main.tsx` da). Lokal brauzerda Sotuv va kirish sahifalari ruscha, tugma yo'q.
+- **Ma'lum cheklov:** koddagi ba'zi matnlar `tr()` ga o'ralmagan va ruschaga tarjima qilinmagan (o'zbekcha qoladi): muvaffaqiyat xabarlari (masalan "Qarz to'lovi qabul qilindi"), o'chirish/arxiv tasdiqlash oynalari sarlavhalari, ba'zi tooltip va Excel import xatolari (taxminan 30 ta joy). Ular keyingi bosqichda tarjima qilinadi.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Telefonda Mahsulotlar (va boshqa jadval) kartalari ekrandan chiqib ketishi
 
 - O'zgardi: telefon kengligida (<=620px) jadvallar "karta" ko'rinishida ko'rsatilganda `table` blok sifatida kengligi 100% bilan chiqadi; uzun nom/joy so'zi o'ralib tushadi.

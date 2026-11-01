@@ -16,6 +16,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes
 } from "react";
+import { useI18n } from "../contexts/I18nContext";
 
 export function Button({
   variant = "primary",
@@ -244,11 +245,12 @@ export function DataTable({
   empty?: boolean;
   minWidth?: number;
 }) {
+  const { tr } = useI18n();
   if (loading) {
     return (
       <div className="table-state">
         <LoaderCircle className="spin" />
-        <span>Ma’lumotlar yuklanmoqda...</span>
+        <span>{tr("Ma’lumotlar yuklanmoqda...", "Загрузка данных...")}</span>
       </div>
     );
   }
@@ -256,7 +258,7 @@ export function DataTable({
     return (
       <div className="table-state">
         <AlertTriangle />
-        <span>Ma’lumot topilmadi</span>
+        <span>{tr("Ma’lumot topilmadi", "Данные не найдены")}</span>
       </div>
     );
   }

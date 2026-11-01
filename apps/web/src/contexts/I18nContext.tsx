@@ -6,14 +6,23 @@ type I18nContextValue = {
   language: Language;
   setLanguage: (language: Language) => void;
   tr: (uzbek: string, russian: string) => string;
+  /** True when the language is fixed by the app (no switcher is shown). */
+  locked: boolean;
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
 const LANGUAGE_KEY = "inventory.language";
 
-export function I18nProvider({ children }: { children: ReactNode }) {
+export function I18nProvider({
+  children,
+  forcedLanguage
+}: {
+  children: ReactNode;
+  /** Fixes the whole app to one language and hides the UZ/RU switcher. */
+  forcedLanguage?: Language;
+}) {
   const [language, setLanguage] = useState<Language>(() =>
-    localStorage.getItem(LANGUAGE_KEY) === "ru" ? "ru" : "uz"
+    forcedLanguage ?? (localStorage.getItem(LANGUAGE_KEY) === "ru" ? "ru" : "uz")
   );
 
   useEffect(() => {
@@ -25,9 +34,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     () => ({
       language,
       setLanguage,
-      tr: (uzbek, russian) => language === "ru" ? russian : uzbek
+      tr: (uzbek, russian) => language === "ru" ? russian : uzbek,
+      locked: Boolean(forcedLanguage)
     }),
-    [language]
+    [language, forcedLanguage]
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
@@ -40,7 +50,8 @@ export function useI18n() {
 }
 
 export function LanguageSwitch({ compact = false }: { compact?: boolean }) {
-  const { language, setLanguage } = useI18n();
+  const { language, setLanguage, locked } = useI18n();
+  if (locked) return null;
   return (
     <div className={`language-switch ${compact ? "compact" : ""}`} aria-label="Til / Язык">
       <button
