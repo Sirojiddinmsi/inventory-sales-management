@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-01 - Mahsulot qatoridagi pensil (tahrirlash) tugmasi olib tashlandi
+
+- O'zgardi: Mahsulotlar ro'yxatida qatordagi pensil tugmasi yo'q. Tahrirlash mahsulot nomini bosganda ochiladigan oynadagi "Редактировать" tugmasi orqali qoladi.
+- Sabab: egasi so'rovi — pensil keraksiz, nomni bosganda tahrirlash baribir ichida bor.
+- Ta'sir: faqat `ProductsPage.tsx` (4 qator: tugma va ishlatilmay qolgan `Edit3` importi). Qator tugmalari endi: tarix, tannarx yangilash (admin), o'chirish (admin). Boshqa funksiyalar o'zgarmadi.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda qator tugmalari "история / себестоимость / удалить"; nom bosilsa oyna ochilib "Редактировать" tugmasi bor, bosilsa "Редактировать товар" formasi ochiladi.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Mahsulotlar o'lcham/raqam bo'yicha to'g'ri tartibda (natural tartib)
 
 - O'zgardi: mahsulot nomlari endi raqamlari son sifatida tartiblanadi: "Лапка P5, P36N, P50, P127L, P351", "Нож 2, 6, 10" (oldin "10" "6" dan oldin, "P127L" "P36" dan oldin chiqardi). Mahsulotlar ro'yxati, qidiruv natijalari, Excel eksport hamda Sotuv va Kirim oynalaridagi mahsulot tanlash ro'yxati (ular ham `sortBy=name` ishlatadi) shu tartibda.

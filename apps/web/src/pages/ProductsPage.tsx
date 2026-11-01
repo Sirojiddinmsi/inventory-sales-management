@@ -5,7 +5,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
-  Edit3,
   FileSpreadsheet,
   History,
   ImageOff,
@@ -1152,9 +1151,6 @@ export function ProductsPage() {
                         title={tr("Harakatlar tarixi", "История движений")}
                       >
                         <History size={16} />
-                      </button>
-                      <button className="icon-button" onClick={() => openEdit(product)} title="Tahrirlash">
-                        <Edit3 size={16} />
                       </button>
                     {user?.role === "ADMIN" && (
                       <>
