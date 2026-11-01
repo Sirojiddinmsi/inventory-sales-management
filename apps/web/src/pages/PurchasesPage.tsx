@@ -7,6 +7,7 @@ import {
   Edit3,
   Eye,
   FileSpreadsheet,
+  FileText,
   ImagePlus,
   PackagePlus,
   Plus,
@@ -241,6 +242,7 @@ export function PurchasesPage() {
   const isDesktopLayout = useMediaQuery("(min-width: 901px)");
   const [page, setPage] = useState(1);
   const [selectedPurchaseDocument, setSelectedPurchaseDocument] = useState<PurchaseDocument | null>(null);
+  const [downloadChoiceDocument, setDownloadChoiceDocument] = useState<PurchaseDocument | null>(null);
   const [returnPage, setReturnPage] = useState(1);
   const [activeView, setActiveView] = useState<"purchases" | "returns">("purchases");
   const [search, setSearch] = useState("");
@@ -1139,23 +1141,12 @@ export function PurchasesPage() {
                           type="button"
                           className="icon-button"
                           disabled={Boolean(exportingDocument)}
-                          aria-busy={exportingPdf}
-                          onClick={() => void exportPurchaseDocument(document, "pdf")}
-                          title={tr("PDF yuklab olish", "Скачать PDF")}
-                          aria-label={tr("PDF yuklab olish", "Скачать PDF")}
+                          aria-busy={exportingPdf || exportingExcel}
+                          onClick={() => setDownloadChoiceDocument(document)}
+                          title={tr("Yuklab olish", "Скачать")}
+                          aria-label={tr("Yuklab olish", "Скачать")}
                         >
                           <Download size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          disabled={Boolean(exportingDocument)}
-                          aria-busy={exportingExcel}
-                          onClick={() => void exportPurchaseDocument(document, "xlsx")}
-                          title={tr("Excel yuklab olish", "Скачать Excel")}
-                          aria-label={tr("Excel yuklab olish", "Скачать Excel")}
-                        >
-                          <FileSpreadsheet size={16} />
                         </button>
                         <button
                           type="button"
@@ -1260,6 +1251,42 @@ export function PurchasesPage() {
           )}
         </>}
       </Card>
+
+      <Modal
+        open={Boolean(downloadChoiceDocument)}
+        title={tr("Yuklab olish", "Скачать документ")}
+        description={downloadChoiceDocument
+          ? `${downloadChoiceDocument.document_number} — ${tr("qaysi formatda yuklab olamiz?", "в каком формате скачать?")}`
+          : undefined}
+        onClose={() => setDownloadChoiceDocument(null)}
+        footer={
+          <Button variant="secondary" onClick={() => setDownloadChoiceDocument(null)}>
+            {tr("Bekor qilish", "Отмена")}
+          </Button>
+        }
+      >
+        <div className="download-format-options">
+          <Button
+            onClick={() => {
+              const target = downloadChoiceDocument;
+              setDownloadChoiceDocument(null);
+              if (target) void exportPurchaseDocument(target, "pdf");
+            }}
+          >
+            <FileText size={17} /> PDF
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              const target = downloadChoiceDocument;
+              setDownloadChoiceDocument(null);
+              if (target) void exportPurchaseDocument(target, "xlsx");
+            }}
+          >
+            <FileSpreadsheet size={17} /> Excel
+          </Button>
+        </div>
+      </Modal>
 
       <PurchaseDetailsModal
         document={selectedPurchaseDocument}

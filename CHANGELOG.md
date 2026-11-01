@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## 2026-11-01 - Prixod ro'yxatida bitta "yuklash" tugmasi: PDF yoki Excel so'raydi
+
+- O'zgardi: Prixod hujjatlari qatorida alohida Excel tugmasi olib tashlandi. "Скачать" (yuklash) tugmasi bosilganda "в каком формате скачать?" oynasi ochiladi: **PDF** yoki **Excel** (yoki Отмена). Tanlangach fayl yuklanadi va oyna yopiladi.
+- Sabab: egasi so'rovi — Excel tugmasi bosilishi bilan darhol yuklanib ketardi; yuklashda format so'ralsin.
+- Ta'sir: `PurchasesPage.tsx` (qator tugmasi, yangi `Modal`, yangi state `downloadChoiceDocument`), `styles.css` (`.download-format-options`). Yuklash funksiyasi (`exportPurchaseDocument`) o'zgarmadi. Qator tugmalari endi: tahrirlash, yuklash, tafsilot. Tafsilot oynasidagi PDF/Excel tugmalari o'zgarmadi.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda: qator tugmalari "Редактировать документ / Скачать / Посмотреть детали"; oyna PDF/Excel/Отмена beradi; Excel bosilganda `GET /purchases/documents/:id/export.xlsx` 200 va "Excel скачан"; telefon kengligida (375 px) oyna to'g'ri ko'rinadi, sahifa kengligi 375. PDF tugmasi alohida bosib sinalmadi (kod yo'li Excel bilan bir xil, format parametri `pdf`).
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
+## 2026-11-01 - Sotuv qatoridagi pensil (tahrirlash) tugmasi olib tashlandi
+
+- O'zgardi: Sotuvlar ro'yxatida qatordagi pensil tugmasi yo'q. Tahrirlash nakladnoy raqamini bosganda ochiladigan oynadagi "Редактировать" tugmasi orqali qoladi.
+- Sabab: egasi so'rovi — nakladnoyni bosganda tahrirlash baribir ichida bor.
+- Ta'sir: faqat `SalesPage.tsx` (tugma va ishlatilmay qolgan `Edit3` importi). Qator tugmalari endi: PDF nakladnoy, qaytarish, arxiv (admin). Arxivdagi sotuvlar uchun o'zgarish yo'q.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda qator tugmalari "PDF / Возврат / В архив", nakladnoy oynasida "Редактировать" bor.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
+## 2026-11-01 - Mahsulot qatoridagi pensil (tahrirlash) tugmasi olib tashlandi
+
+- O'zgardi: Mahsulotlar ro'yxatida qatordagi pensil tugmasi yo'q. Tahrirlash mahsulot nomini bosganda ochiladigan oynadagi "Редактировать" tugmasi orqali qoladi.
+- Sabab: egasi so'rovi — pensil keraksiz, nomni bosganda tahrirlash baribir ichida bor.
+- Ta'sir: faqat `ProductsPage.tsx` (4 qator: tugma va ishlatilmay qolgan `Edit3` importi). Qator tugmalari endi: tarix, tannarx yangilash (admin), o'chirish (admin). Boshqa funksiyalar o'zgarmadi.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda qator tugmalari "история / себестоимость / удалить"; nom bosilsa oyna ochilib "Редактировать" tugmasi bor, bosilsa "Редактировать товар" formasi ochiladi.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Mahsulotlar o'lcham/raqam bo'yicha to'g'ri tartibda (natural tartib)
 
 - O'zgardi: mahsulot nomlari endi raqamlari son sifatida tartiblanadi: "Лапка P5, P36N, P50, P127L, P351", "Нож 2, 6, 10" (oldin "10" "6" dan oldin, "P127L" "P36" dan oldin chiqardi). Mahsulotlar ro'yxati, qidiruv natijalari, Excel eksport hamda Sotuv va Kirim oynalaridagi mahsulot tanlash ro'yxati (ular ham `sortBy=name` ishlatadi) shu tartibda.
