@@ -120,6 +120,15 @@ const productFrom = `
   JOIN categories c ON c.id = p.category_id
 `;
 
+// "Natural" sort key for product names: text parts compare case-insensitively and digit
+// runs compare by value, so "P5" < "P36" < "P127" and "Нож 6" < "Нож 10".
+const naturalNameSortKey = (column: string) =>
+  `(SELECT array_agg(
+       CASE WHEN t.m[1] ~ '^[0-9]' THEN lpad(t.m[1], 30, '0') ELSE lower(t.m[1]) END
+       ORDER BY t.ord
+     )
+     FROM regexp_matches(${column}, '(\\d+|\\D+)', 'g') WITH ORDINALITY AS t(m, ord))`;
+
 export class ProductRepository {
   async correctRemainingFifoCost(
     id: string,
@@ -564,14 +573,16 @@ export class ProductRepository {
 
     const allowedSort: Record<string, string> = {
       id: "p.id",
-      name: "p.name",
+      name: naturalNameSortKey("p.name"),
       code: "p.code",
       stock_quantity: "p.stock_quantity",
       sale_price: "p.sale_price",
       created_at: "p.created_at"
     };
     const orderBy = allowedSort[input.sortBy] ?? "p.id";
-    const pagedOrderBy = orderBy.replaceAll("p.", "");
+    const pagedOrderBy = input.sortBy === "name"
+      ? naturalNameSortKey("name")
+      : orderBy.replaceAll("p.", "");
     const direction = input.sortOrder === "asc" ? "ASC" : "DESC";
     const secondaryDirection = input.sortBy === "created_at" ? direction : "ASC";
     values.push(input.limit, (input.page - 1) * input.limit);
@@ -663,7 +674,7 @@ export class ProductRepository {
 
     const allowedSort: Record<string, string> = {
       id: "p.id",
-      name: "p.name",
+      name: naturalNameSortKey("p.name"),
       code: "p.code",
       stock_quantity: "p.stock_quantity",
       sale_price: "p.sale_price",
