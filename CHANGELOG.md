@@ -8,7 +8,8 @@
 - Ta'sir: faqat `GET /products` va `/products/export-inventory.xlsx` tartiblash (`sortBy=name`). Boshqa tartiblashlar (`id`, kod, narx, qoldiq) o'zgarmadi. 884 ta mahsulotda tartiblash ifodasi tez ishlaydi (qator uchun kichik hisoblash).
 - Testlar: production ma'lumotida faqat o'qish so'rovi bilan natural tartib tekshirilgan ("нож", "лапка p"); lokal API'da 13 ta o'lchamli sinov mahsuloti bilan `GET /products?search=..&sortBy=name` (asc va desc) to'g'ri tartib berdi; typecheck va testlar o'tdi (API 62, web 56). Production'da (deploydan keyin) egasi tasdiqlashi kerak.
 - Migration/config: yo'q.
-- Rollback: shu commitni revert qilish va `api` image'ni qayta qurish.
+- **Production'ga chiqarildi: 2026-11-01 14:04 UTC**, `main` = `8adc27e`. Faqat `api` image (`tikuv-market-api:natural-sort-8adc27e`); `web` va `db` tegilmadi. API konteyneri almashganda ~15 soniya javob bermadi (502), keyin `/health` ok. Backup: `inventory_sales-20261101T140256Z.dump` (tekshirilgan). Deploydan keyin productionning o'z kodi orqali (faqat o'qish) tekshirildi: "нож" va "лапка p" qidiruvlari to'g'ri natural tartibda, jami 884 ta mahsulot.
+- Rollback: `docker tag tikuv-market-api:rollback-natural-sort-20261101T140256Z tikuv-market-api:latest && docker compose -f docker-compose.prod.yml up -d --no-deps api`; eski fayl `/var/backups/tikuv-market/releases/natural-sort-before-20261101T140256Z/`.
 
 ## 2026-11-01 - Sayt faqat ruscha, UZ/RU tugmasi olib tashlandi
 
