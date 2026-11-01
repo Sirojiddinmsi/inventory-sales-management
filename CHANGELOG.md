@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 2026-11-01 - Mahsulotlar o'lcham/raqam bo'yicha to'g'ri tartibda (natural tartib)
+
+- O'zgardi: mahsulot nomlari endi raqamlari son sifatida tartiblanadi: "Лапка P5, P36N, P50, P127L, P351", "Нож 2, 6, 10" (oldin "10" "6" dan oldin, "P127L" "P36" dan oldin chiqardi). Mahsulotlar ro'yxati, qidiruv natijalari, Excel eksport hamda Sotuv va Kirim oynalaridagi mahsulot tanlash ro'yxati (ular ham `sortBy=name` ishlatadi) shu tartibda.
+- Sabab: ro'yxat nom bo'yicha oddiy matn taqqoslash bilan tartiblangan ("10" < "6", chunki "1" < "6"). Production'da nomlarning 884 tadan 512 tasida raqam bor.
+- Qanday: `product.repository.ts` ga `naturalNameSortKey()` — nom matn va raqam bo'laklariga bo'linadi, matn kichik harfga keltirib, raqam nol bilan to'ldirilib taqqoslanadi. Bazada o'zgarish yo'q (migratsiya, kollatsiya, indeks kerak emas). Production kollatsiyasi `en_US.utf8`: avval lotin (A-Z), keyin kirill (А-Я), katta-kichik harf farq qilmaydi.
+- Ta'sir: faqat `GET /products` va `/products/export-inventory.xlsx` tartiblash (`sortBy=name`). Boshqa tartiblashlar (`id`, kod, narx, qoldiq) o'zgarmadi. 884 ta mahsulotda tartiblash ifodasi tez ishlaydi (qator uchun kichik hisoblash).
+- Testlar: production ma'lumotida faqat o'qish so'rovi bilan natural tartib tekshirilgan ("нож", "лапка p"); lokal API'da 13 ta o'lchamli sinov mahsuloti bilan `GET /products?search=..&sortBy=name` (asc va desc) to'g'ri tartib berdi; typecheck va testlar o'tdi (API 62, web 56). Production'da (deploydan keyin) egasi tasdiqlashi kerak.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish va `api` image'ni qayta qurish.
+
 ## 2026-11-01 - Sayt faqat ruscha, UZ/RU tugmasi olib tashlandi
 
 - O'zgardi: yuqori o'ng burchak (va kirish sahifasi)dagi UZ/RU tugmasi yo'q; sayt hamma uchun doim ruscha. Telefonda oldin saqlangan "UZ" tanlovi ham RU ga o'tadi (lokalda `inventory.language=uz` qo'yib tekshirildi).
