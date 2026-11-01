@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-01 - Telefonda Mahsulotlar (va boshqa jadval) kartalari ekrandan chiqib ketishi
+
+- O'zgardi: telefon kengligida (<=620px) jadvallar "karta" ko'rinishida ko'rsatilganda `table` blok sifatida kengligi 100% bilan chiqadi; uzun nom/joy so'zi o'ralib tushadi.
+- Sabab: kartalarda `table` hamon jadval (`display: table`) edi, shuning uchun uzun bo'linmas matn (masalan uzun mahsulot nomi yoki joy "Полка-А12-Ряд-3-Ящик-7-...") jadvalni kengaytirib, butun sahifani ekrandan kengroq qilgan (lokalda 375 px ekranda hujjat kengligi 601 px bo'lib qayta hosil qilindi), kartalar filtr kartasidan o'ngga chiqib ketgan.
+- Ta'sir: faqat `apps/web/src/styles.css`, 620px dan kichik ekranlardagi `.table-wrap` qoidalari (Mahsulotlar, Sotuv, Kirim, Qarz, Xarajat va boshqa jadvallar). Desktop o'zgarmadi.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56). Lokal brauzerda 375 px da: uzun nomli mahsulot bilan hujjat kengligi 601 → 375; kartalar 23–352 px (ichkarida); Sotuv va Kirim sahifalari ham ekran ichida. Qarz sahifasida lokalda ma'lumot yo'q (tekshirilmagan). Haqiqiy iPhone'da sinalmagan.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Telefonda "С / По" (Dan / Gacha) sana maydonlari yonga cho'zilib ketishi
 
 - O'zgardi: telefon kengligida (<=620px) sana/vaqt maydonlari (`date`, `datetime-local`, `time`) kartaning ichida qoladigan qilindi.

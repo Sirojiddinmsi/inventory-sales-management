@@ -1338,7 +1338,9 @@ td strong { color: #1e293b; font-size: 12px; }
   .card-header { min-height: 52px; padding: 10px 14px; align-items: flex-start; gap: 8px; flex-direction: column; }
   .card-header h2 { font-size: 13px; }
   .table-wrap { overflow-x: visible; }
-  .table-wrap table { min-width: 0 !important; }
+  .table-wrap table { min-width: 0 !important; display: block; width: 100%; max-width: 100%; }
+  /* card mode: a long unbroken name or place must wrap instead of stretching the whole page */
+  .table-wrap tr, .table-wrap td { min-width: 0; max-width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
   .table-wrap thead { display: none; }
   .table-wrap tbody { display: block; padding: 8px; }
   .table-wrap tr { display: block; margin-bottom: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
