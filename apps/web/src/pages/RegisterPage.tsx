@@ -6,16 +6,16 @@ import toast from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "../components/ui";
-import { LanguageSwitch, useI18n } from "../contexts/I18nContext";
+import { LanguageSwitch, trStatic, useI18n } from "../contexts/I18nContext";
 import { api } from "../lib/api";
 
 const schema = z.object({
-  name: z.string().trim().min(2, "Ism kamida 2 ta belgidan iborat bo'lsin"),
-  email: z.email("Email manzil noto'g'ri"),
-  password: z.string().min(8, "Parol kamida 8 ta belgidan iborat bo'lsin"),
+  name: z.string().trim().min(2, { error: () => trStatic("Ism kamida 2 ta belgidan iborat bo'lsin", "Имя должно содержать не менее 2 символов") }),
+  email: z.email({ error: () => trStatic("Email manzil noto'g'ri", "Неверный адрес email") }),
+  password: z.string().min(8, { error: () => trStatic("Parol kamida 8 ta belgidan iborat bo'lsin", "Пароль должен содержать не менее 8 символов") }),
   confirmPassword: z.string()
 }).refine((value) => value.password === value.confirmPassword, {
-  message: "Parollar bir xil emas",
+  error: () => trStatic("Parollar bir xil emas", "Пароли не совпадают"),
   path: ["confirmPassword"]
 });
 

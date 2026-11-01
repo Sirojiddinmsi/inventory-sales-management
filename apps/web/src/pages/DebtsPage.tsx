@@ -147,7 +147,7 @@ export function DebtsPage() {
       })
     }),
     onSuccess: () => {
-      toast.success("Qarz to‘lovi qabul qilindi");
+      toast.success(tr("Qarz to‘lovi qabul qilindi", "Оплата долга принята"));
       setAmount("");
       setPaymentMethod("CASH");
       setCashAmount("");
@@ -189,7 +189,7 @@ export function DebtsPage() {
       body: JSON.stringify({ reason: archiveReason })
     }),
     onSuccess: () => {
-      toast.success("Qarz 30 kunlik arxivga o‘tkazildi");
+      toast.success(tr("Qarz 30 kunlik arxivga o‘tkazildi", "Долг перемещён в архив на 30 дней"));
       setArchiveDebt(null);
       setArchiveReason("");
       refreshDebts();
@@ -200,7 +200,7 @@ export function DebtsPage() {
   const restoreMutation = useMutation({
     mutationFn: (id: string) => api(`/debts/${id}/restore`, { method: "POST" }),
     onSuccess: () => {
-      toast.success("Qarz arxivdan tiklandi");
+      toast.success(tr("Qarz arxivdan tiklandi", "Долг восстановлен из архива"));
       refreshDebts();
     },
     onError: (error) => toast.error(error.message)
@@ -209,7 +209,7 @@ export function DebtsPage() {
   const purgeMutation = useMutation({
     mutationFn: (id: string) => api<void>(`/debts/${id}/permanent`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Qarz butunlay o‘chirildi");
+      toast.success(tr("Qarz butunlay o‘chirildi", "Долг удалён навсегда"));
       setPurgeDebt(null);
       refreshDebts();
     },
@@ -458,7 +458,7 @@ export function DebtsPage() {
                       {isAdmin && (
                         <button
                           className="icon-button danger-icon"
-                          title="Arxivga o‘tkazish"
+                          title={tr("Arxivga o‘tkazish", "В архив")}
                           onClick={() => setArchiveDebt(debt)}
                         >
                           <Archive size={16} />
@@ -477,7 +477,7 @@ export function DebtsPage() {
                       </button>
                       <button
                         className="icon-button danger-icon"
-                        title="Butunlay o‘chirish"
+                        title={tr("Butunlay o‘chirish", "Удалить навсегда")}
                         onClick={() => setPurgeDebt(debt)}
                       >
                         <Trash2 size={16} />
@@ -784,35 +784,38 @@ export function DebtsPage() {
 
       <Modal
         open={Boolean(archiveDebt)}
-        title="Qarzni arxivga o‘tkazish"
-        description="Qarz faol ro‘yxatdan olinadi va 30 kun davomida arxivda saqlanadi."
+        title={tr("Qarzni arxivga o‘tkazish", "Переместить долг в архив")}
+        description={tr("Qarz faol ro‘yxatdan olinadi va 30 kun davomida arxivda saqlanadi.", "Долг будет убран из активного списка и хранится в архиве 30 дней.")}
         onClose={() => setArchiveDebt(null)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setArchiveDebt(null)}>Bekor qilish</Button>
+            <Button variant="secondary" onClick={() => setArchiveDebt(null)}>{tr("Bekor qilish", "Отмена")}</Button>
             <Button
               variant="danger"
               loading={archiveMutation.isPending}
               disabled={archiveReason.trim().length < 2}
               onClick={() => archiveMutation.mutate()}
             >
-              Arxivga o‘tkazish
+              {tr("Arxivga o‘tkazish", "В архив")}
             </Button>
           </>
         }
       >
         <Textarea
-          label="O‘chirish sababi *"
+          label={tr("O‘chirish sababi *", "Причина удаления *")}
           value={archiveReason}
           onChange={(event) => setArchiveReason(event.target.value)}
-          placeholder="Sababni kiriting"
+          placeholder={tr("Sababni kiriting", "Укажите причину")}
         />
       </Modal>
 
       <ConfirmDialog
         open={Boolean(purgeDebt)}
-        title="Qarzni butunlay o‘chirish"
-        message={`${purgeDebt?.customer_name ?? ""} qarzi va uning to‘lov tarixi qayta tiklab bo‘lmaydigan tarzda o‘chiriladi.`}
+        title={tr("Qarzni butunlay o‘chirish", "Удалить долг навсегда")}
+        message={tr(
+          `${purgeDebt?.customer_name ?? ""} qarzi va uning to‘lov tarixi qayta tiklab bo‘lmaydigan tarzda o‘chiriladi.`,
+          `Долг клиента ${purgeDebt?.customer_name ?? ""} и история его платежей будут удалены без возможности восстановления.`
+        )}
         loading={purgeMutation.isPending}
         onCancel={() => setPurgeDebt(null)}
         onConfirm={() => purgeDebt && purgeMutation.mutate(purgeDebt.id)}

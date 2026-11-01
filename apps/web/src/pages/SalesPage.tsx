@@ -452,7 +452,7 @@ export function SalesPage() {
       body: JSON.stringify({ reason: archiveReason })
     }),
     onSuccess: () => {
-      toast.success("Sotuv 30 kunlik arxivga o‘tkazildi");
+      toast.success(tr("Sotuv 30 kunlik arxivga o‘tkazildi", "Продажа перемещена в архив на 30 дней"));
       setArchiveSale(null);
       setArchiveReason("");
       refreshSales();
@@ -463,7 +463,7 @@ export function SalesPage() {
   const restoreMutation = useMutation({
     mutationFn: (id: string) => api(`/sales/${id}/restore`, { method: "POST" }),
     onSuccess: () => {
-      toast.success("Sotuv arxivdan tiklandi");
+      toast.success(tr("Sotuv arxivdan tiklandi", "Продажа восстановлена из архива"));
       refreshSales();
     },
     onError: (error) => toast.error(error.message)
@@ -472,7 +472,7 @@ export function SalesPage() {
   const purgeMutation = useMutation({
     mutationFn: (id: string) => api<void>(`/sales/${id}/permanent`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Sotuv butunlay o‘chirildi");
+      toast.success(tr("Sotuv butunlay o‘chirildi", "Продажа удалена навсегда"));
       setPurgeSale(null);
       refreshSales();
     },
@@ -494,8 +494,8 @@ export function SalesPage() {
     onSuccess: ({ affected }) => {
       toast.success(
         archived
-          ? `${affected} ta nakladnoy butunlay o‘chirildi`
-          : `${affected} ta nakladnoy arxivga o‘tkazildi`
+          ? tr(`${affected} ta nakladnoy butunlay o‘chirildi`, `Накладных удалено навсегда: ${affected}`)
+          : tr(`${affected} ta nakladnoy arxivga o‘tkazildi`, `Накладных перемещено в архив: ${affected}`)
       );
       setBulkDeleteOpen(false);
       setSelectedSaleIds([]);
@@ -518,7 +518,7 @@ export function SalesPage() {
       })
     }),
     onSuccess: () => {
-      toast.success("Mahsulot omborga qaytarildi");
+      toast.success(tr("Mahsulot omborga qaytarildi", "Товар возвращён на склад"));
       setReturnSale(null);
       setReturnQuantities({});
       setReturnReason("");
@@ -615,7 +615,7 @@ export function SalesPage() {
       setProductSearch("");
       setModalOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Sotuvni ochib bo‘lmadi");
+      toast.error(error instanceof Error ? error.message : tr("Sotuvni ochib bo‘lmadi", "Не удалось открыть продажу"));
     }
   };
 
@@ -626,7 +626,7 @@ export function SalesPage() {
       setReturnQuantities({});
       setReturnReason("");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Sotuvni ochib bo‘lmadi");
+      toast.error(error instanceof Error ? error.message : tr("Sotuvni ochib bo‘lmadi", "Не удалось открыть продажу"));
     }
   };
 
@@ -804,7 +804,7 @@ export function SalesPage() {
     try {
       await download(`/sales/${sale.id}/receipt.pdf`, `${sale.invoice_number}.pdf`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Chekni yuklab bo‘lmadi");
+      toast.error(error instanceof Error ? error.message : tr("Chekni yuklab bo‘lmadi", "Не удалось скачать чек"));
     }
   };
   const toggleSaleSelection = (saleId: string, checked: boolean) => {
@@ -961,7 +961,7 @@ export function SalesPage() {
                         {isAdmin && (
                           <button
                             className="icon-button danger-icon"
-                            title="Arxivga o‘tkazish"
+                            title={tr("Arxivga o‘tkazish", "В архив")}
                             onClick={() => setArchiveSale(sale)}
                           >
                             <Archive size={16} />
@@ -980,7 +980,7 @@ export function SalesPage() {
                         </button>
                         <button
                           className="icon-button danger-icon"
-                          title="Butunlay o‘chirish"
+                          title={tr("Butunlay o‘chirish", "Удалить навсегда")}
                           onClick={() => setPurgeSale(sale)}
                         >
                           <Trash2 size={16} />
@@ -1021,8 +1021,8 @@ export function SalesPage() {
         open={modalOpen}
         title={editingId ? tr("Sotuv nakladnoyini tahrirlash", "Редактировать накладную") : tr("Yangi sotuv", "Новая продажа")}
         description={editingId
-          ? "Saqlanganda ombor qoldig‘i eski va yangi miqdor farqiga ko‘ra yangilanadi."
-          : "Stock sotuv saqlangandan keyin avtomatik kamayadi."}
+          ? tr("Saqlanganda ombor qoldig‘i eski va yangi miqdor farqiga ko‘ra yangilanadi.", "При сохранении остаток на складе изменится на разницу между старым и новым количеством.")
+          : tr("Stock sotuv saqlangandan keyin avtomatik kamayadi.", "Остаток на складе уменьшится автоматически после сохранения продажи.")}
         onClose={() => setModalOpen(false)}
         className="sale-modal"
         bodyClassName="sale-modal-body"
@@ -1593,7 +1593,10 @@ export function SalesPage() {
       <Modal
         open={Boolean(returnSale)}
         title={tr("Mahsulot qaytarish", "Возврат товара")}
-        description={`${returnSale?.invoice_number ?? ""} nakladnoyi bo‘yicha omborga qaytarish.`}
+        description={tr(
+          `${returnSale?.invoice_number ?? ""} nakladnoyi bo‘yicha omborga qaytarish.`,
+          `Возврат на склад по накладной ${returnSale?.invoice_number ?? ""}.`
+        )}
         onClose={() => setReturnSale(null)}
         wide
         footer={
@@ -1639,35 +1642,35 @@ export function SalesPage() {
             label={tr("Qaytarish sababi *", "Причина возврата *")}
             value={returnReason}
             onChange={(event) => setReturnReason(event.target.value)}
-            placeholder="Masalan: mijoz qaytardi, mahsulot mos kelmadi"
+            placeholder={tr("Masalan: mijoz qaytardi, mahsulot mos kelmadi", "Например: клиент вернул, товар не подошёл")}
           />
         </div>
       </Modal>
 
       <Modal
         open={Boolean(archiveSale)}
-        title="Sotuvni arxivga o‘tkazish"
-        description="Nakladnoy o‘chiriladi, qolgan mahsulotlar omborga qaytadi va yozuv 30 kun saqlanadi."
+        title={tr("Sotuvni arxivga o‘tkazish", "Переместить продажу в архив")}
+        description={tr("Nakladnoy o‘chiriladi, qolgan mahsulotlar omborga qaytadi va yozuv 30 kun saqlanadi.", "Накладная будет удалена, оставшиеся товары вернутся на склад, запись хранится 30 дней.")}
         onClose={() => setArchiveSale(null)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setArchiveSale(null)}>Bekor qilish</Button>
+            <Button variant="secondary" onClick={() => setArchiveSale(null)}>{tr("Bekor qilish", "Отмена")}</Button>
             <Button
               variant="danger"
               loading={archiveMutation.isPending}
               disabled={archiveReason.trim().length < 2}
               onClick={() => archiveMutation.mutate()}
             >
-              Arxivga o‘tkazish
+              {tr("Arxivga o‘tkazish", "В архив")}
             </Button>
           </>
         }
       >
         <Textarea
-          label="O‘chirish sababi *"
+          label={tr("O‘chirish sababi *", "Причина удаления *")}
           value={archiveReason}
           onChange={(event) => setArchiveReason(event.target.value)}
-          placeholder="Sababni kiriting"
+          placeholder={tr("Sababni kiriting", "Укажите причину")}
         />
       </Modal>
 
@@ -1675,8 +1678,11 @@ export function SalesPage() {
 
       <ConfirmDialog
         open={Boolean(purgeSale)}
-        title="Sotuvni butunlay o‘chirish"
-        message={`${purgeSale?.invoice_number ?? ""} nakladnoyi va unga bog‘liq qarz/to‘lovlar qayta tiklab bo‘lmaydigan tarzda o‘chiriladi.`}
+        title={tr("Sotuvni butunlay o‘chirish", "Удалить продажу навсегда")}
+        message={tr(
+          `${purgeSale?.invoice_number ?? ""} nakladnoyi va unga bog‘liq qarz/to‘lovlar qayta tiklab bo‘lmaydigan tarzda o‘chiriladi.`,
+          `Накладная ${purgeSale?.invoice_number ?? ""} и связанные с ней долг и платежи будут удалены без возможности восстановления.`
+        )}
         loading={purgeMutation.isPending}
         onCancel={() => setPurgeSale(null)}
         onConfirm={() => purgeSale && purgeMutation.mutate(purgeSale.id)}

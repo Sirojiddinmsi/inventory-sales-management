@@ -1,3 +1,5 @@
+import { trStatic } from "../contexts/I18nContext";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 const TOKEN_KEY = "inventory.auth.token";
 
@@ -69,7 +71,7 @@ export async function api<T>(
     const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
     throw new ApiError(
       response.status,
-      body.error?.message ?? "Server bilan bog‘lanishda xatolik",
+      body.error?.message ?? trStatic("Server bilan bog‘lanishda xatolik", "Ошибка связи с сервером"),
       body.error?.code,
       body.error?.details
     );
@@ -84,7 +86,7 @@ export async function download(path: string, filename: string, params?: Record<s
   const response = await fetch(`${API_URL}${path}${queryString(params)}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined
   });
-  if (!response.ok) throw new ApiError(response.status, "Faylni yuklab bo‘lmadi");
+  if (!response.ok) throw new ApiError(response.status, trStatic("Faylni yuklab bo‘lmadi", "Не удалось скачать файл"));
 
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
@@ -114,7 +116,7 @@ export async function downloadPost(
     const errorBody = (await response.json().catch(() => ({}))) as ApiErrorBody;
     throw new ApiError(
       response.status,
-      errorBody.error?.message ?? "Faylni yuklab bo'lmadi",
+      errorBody.error?.message ?? trStatic("Faylni yuklab bo'lmadi", "Не удалось скачать файл"),
       errorBody.error?.code,
       errorBody.error?.details
     );

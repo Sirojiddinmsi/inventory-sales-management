@@ -96,9 +96,9 @@ export function ReportsPage() {
   const exportExcel = async () => {
     try {
       await download("/reports/export.xlsx", `hisobot-${from}-${to}.xlsx`, params);
-      toast.success("Excel hisobot yuklandi");
+      toast.success(tr("Excel hisobot yuklandi", "Отчёт Excel загружен"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Export xatosi");
+      toast.error(error instanceof Error ? error.message : tr("Export xatosi", "Ошибка экспорта"));
     }
   };
 

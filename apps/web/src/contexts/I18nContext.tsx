@@ -13,6 +13,13 @@ type I18nContextValue = {
 const I18nContext = createContext<I18nContextValue | null>(null);
 const LANGUAGE_KEY = "inventory.language";
 
+// For code that runs outside React components (API helpers, zod messages, format helpers).
+// Kept in sync by I18nProvider; use `tr` from useI18n() inside components.
+let currentLanguage: Language = "uz";
+export function trStatic(uzbek: string, russian: string) {
+  return currentLanguage === "ru" ? russian : uzbek;
+}
+
 export function I18nProvider({
   children,
   forcedLanguage
@@ -24,6 +31,8 @@ export function I18nProvider({
   const [language, setLanguage] = useState<Language>(() =>
     forcedLanguage ?? (localStorage.getItem(LANGUAGE_KEY) === "ru" ? "ru" : "uz")
   );
+
+  currentLanguage = language;
 
   useEffect(() => {
     localStorage.setItem(LANGUAGE_KEY, language);

@@ -343,6 +343,7 @@ export function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { tr } = useI18n();
   return (
     <Modal
       open={open}
@@ -350,8 +351,8 @@ export function ConfirmDialog({
       onClose={onCancel}
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel}>Bekor qilish</Button>
-          <Button variant="danger" loading={loading} onClick={onConfirm}>O‘chirish</Button>
+          <Button variant="secondary" onClick={onCancel}>{tr("Bekor qilish", "Отмена")}</Button>
+          <Button variant="danger" loading={loading} onClick={onConfirm}>{tr("O‘chirish", "Удалить")}</Button>
         </>
       }
     >
