@@ -7,7 +7,8 @@
 - Ta'sir: faqat `apps/web/src/styles.css` (620px dan kichik ekranlar, 4 qator). Desktop va API o'zgarmadi. Hamma bo'limlardagi sana maydonlariga ta'sir qiladi (Sotuv, Kirim, Xarajat, Hisobot, mahsulot tarixi, formalar).
 - Testlar: lokal brauzerda 375 px kenglikda Sotuvlar, Hisobotlar, Xarajatlar, Kirim sahifalarida sana maydonlari ekran ichida (29–346 px, hujjat kengligi 375). **Haqiqiy iPhone/Safari'da sinalmagan** (brauzer emulyatori Chromium; muammoning o'zi faqat Safari'da chiqadi), shuning uchun deploydan keyin telefonda tasdiqlash kerak.
 - Migration/config: yo'q.
-- Rollback: shu commitni revert qilish.
+- **Production'ga chiqarildi: 2026-11-01 13:18 UTC**, `main` = `f785a8a`. Faqat `web` image (`tikuv-market-web:mobile-date-f785a8a`); `api`, `db` tegilmadi. Backup: `inventory_sales-20261101T131617Z.dump` (tekshirilgan). Production CSS'da yangi qoida bor, sayt 200, `/health` ok. (Deploy paytida SSH ulanishi ikki marta vaqtincha uzildi; server tomonda hech narsa o'zgarmagan edi, qayta urinishda o'tdi.)
+- Rollback: `docker tag tikuv-market-web:rollback-mobile-date-20261101T131616Z tikuv-market-web:latest && docker compose -f docker-compose.prod.yml up -d --no-deps web`; eski fayl `/var/backups/tikuv-market/releases/mobile-date-before-20261101T131616Z/`.
 
 ## 2026-10-18 - Mahsulotlar ro'yxati alifbo bo'yicha
 
