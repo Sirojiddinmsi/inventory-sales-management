@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 2026-11-01 - Deploy yozuvi: UI to'plami (pensil olib tashlash x2, prixodda PDF/Excel tanlash)
+
+- **Production'ga chiqarildi: 2026-11-01 14:16 UTC**, `main` = `77cfa07`. Quyidagi uchta o'zgarish birga: mahsulot qatoridagi pensil olib tashlandi, sotuv qatoridagi pensil olib tashlandi, prixodda yuklash tugmasi PDF/Excel so'raydi. Faqat `web` image (`tikuv-market-web:ui-batch-77cfa07`); `api` va `db` tegilmadi. 4 ta fayl (serverdagi nusxalari oldingi `main` bilan mazmunan mos edi, yangilari paketda qo'yilgan, hash tekshirilgan). Backup: `inventory_sales-20261101T141433Z.dump` (tekshirilgan). Sayt 200, `/health` ok; yangi bundle'da "в каком формате скачать" va `download-format-options` bor.
+- Rollback: `docker tag tikuv-market-web:rollback-ui-batch-20261101T141433Z tikuv-market-web:latest && docker compose -f docker-compose.prod.yml up -d --no-deps web`; eski fayllar `/var/backups/tikuv-market/releases/ui-batch-before-20261101T141433Z/old-files.tar`.
+
 ## 2026-11-01 - Prixod ro'yxatida bitta "yuklash" tugmasi: PDF yoki Excel so'raydi
 
 - O'zgardi: Prixod hujjatlari qatorida alohida Excel tugmasi olib tashlandi. "Скачать" (yuklash) tugmasi bosilganda "в каком формате скачать?" oynasi ochiladi: **PDF** yoki **Excel** (yoki Отмена). Tanlangach fayl yuklanadi va oyna yopiladi.
