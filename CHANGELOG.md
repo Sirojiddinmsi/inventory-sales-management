@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-01 - Telefonda "С / По" (Dan / Gacha) sana maydonlari yonga cho'zilib ketishi
+
+- O'zgardi: telefon kengligida (<=620px) sana/vaqt maydonlari (`date`, `datetime-local`, `time`) kartaning ichida qoladigan qilindi.
+- Sabab: iPhone (Safari) mahalliy sana maydonini o'z ichki kengligi bo'yicha o'lchaydi va `.input` ning `width:100%` qoidasini hisobga olmay kartadan o'ngga chiqib ketadi; `.filters .field` da yana `min-width:150px` bor edi. Tuzatish: `appearance:none`, `min-width:0`, `max-width:100%`, `box-sizing:border-box` va sana qiymati matni chapga tekislandi.
+- Ta'sir: faqat `apps/web/src/styles.css` (620px dan kichik ekranlar, 4 qator). Desktop va API o'zgarmadi. Hamma bo'limlardagi sana maydonlariga ta'sir qiladi (Sotuv, Kirim, Xarajat, Hisobot, mahsulot tarixi, formalar).
+- Testlar: lokal brauzerda 375 px kenglikda Sotuvlar, Hisobotlar, Xarajatlar, Kirim sahifalarida sana maydonlari ekran ichida (29–346 px, hujjat kengligi 375). **Haqiqiy iPhone/Safari'da sinalmagan** (brauzer emulyatori Chromium; muammoning o'zi faqat Safari'da chiqadi), shuning uchun deploydan keyin telefonda tasdiqlash kerak.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-10-18 - Mahsulotlar ro'yxati alifbo bo'yicha
 
 - O'zgardi: Mahsulotlar sahifasi (va "Excelga yuklash") endi nomi bo'yicha A→Z tartiblangan.
