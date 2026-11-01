@@ -32,7 +32,7 @@ import {
   Select,
   Textarea
 } from "../components/ui";
-import { useI18n } from "../contexts/I18nContext";
+import { trStatic, useI18n } from "../contexts/I18nContext";
 import { PurchaseDetailsModal } from "../components/PurchaseDetailsModal";
 import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { SupplierReturnDetailsModal } from "../components/SupplierReturnDetailsModal";
@@ -424,9 +424,10 @@ export function PurchasesPage() {
       if (editingDocument) {
         toast.success(tr("Kirim yozuvi yangilandi", "Приход обновлен"));
       } else {
-        toast.success(
-          `${result.totalRows} ta mahsulot kirim qilindi. Jami: ${money(result.totalAmount)}`
-        );
+        toast.success(tr(
+          `${result.totalRows} ta mahsulot kirim qilindi. Jami: ${money(result.totalAmount)}`,
+          `Оприходовано товаров: ${result.totalRows}. Итого: ${money(result.totalAmount)}`
+        ));
       }
       setModalOpen(false);
       setEditingDocument(null);
@@ -567,7 +568,7 @@ export function PurchasesPage() {
       body: JSON.stringify({ name: supplierName, phone: supplierPhone || null })
     }),
     onSuccess: (supplier) => {
-      toast.success("Yetkazib beruvchi qo‘shildi");
+      toast.success(tr("Yetkazib beruvchi qo‘shildi", "Поставщик добавлен"));
       setDefaultSupplierId(supplier.id);
       setLines((current) =>
         current.map((line) =>
@@ -600,9 +601,10 @@ export function PurchasesPage() {
         })
       }),
     onSuccess: (result) => {
-      toast.success(
-        `${result.totalRows} ta qator kirim qilindi. Jami: ${money(result.totalAmount)}`
-      );
+      toast.success(tr(
+        `${result.totalRows} ta qator kirim qilindi. Jami: ${money(result.totalAmount)}`,
+        `Оприходовано строк: ${result.totalRows}. Итого: ${money(result.totalAmount)}`
+      ));
       setImportOpen(false);
       setImportRows([]);
       setImportFileName("");
@@ -931,7 +933,7 @@ export function PurchasesPage() {
     try {
       await download("/purchases/import-template.xlsx", "kirim-import-shablon.xlsx");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Shablonni yuklab bo‘lmadi");
+      toast.error(error instanceof Error ? error.message : tr("Shablonni yuklab bo‘lmadi", "Не удалось скачать шаблон"));
     }
   };
 
@@ -963,7 +965,7 @@ export function PurchasesPage() {
     setImportRows([]);
     try {
       const sheet = await readSheet(file);
-      if (sheet.length < 2) throw new Error("Excel faylda ma’lumot qatorlari yo‘q");
+      if (sheet.length < 2) throw new Error(tr("Excel faylda ma’lumot qatorlari yo‘q", "В файле Excel нет строк с данными"));
       const headers = sheet[0]!.map(normalizeHeader);
       const getIndex = (aliases: readonly string[]) =>
         headers.findIndex((header) => aliases.includes(header));
@@ -978,7 +980,7 @@ export function PurchasesPage() {
       };
       for (const required of ["product", "quantity", "purchasePrice"] as const) {
         if (indexes[required] < 0) {
-          throw new Error(`Majburiy ustun topilmadi: ${headerAliases[required][0]}`);
+          throw new Error(`${trStatic("Majburiy ustun topilmadi: ", "Не найден обязательный столбец: ")}${headerAliases[required][0]}`);
         }
       }
 
@@ -1020,10 +1022,10 @@ export function PurchasesPage() {
         }];
       });
 
-      if (!parsed.length) throw new Error("Import qilinadigan qator topilmadi");
+      if (!parsed.length) throw new Error(tr("Import qilinadigan qator topilmadi", "Нет строк для импорта"));
       setImportRows(parsed);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Excel faylni o‘qib bo‘lmadi");
+      setImportError(error instanceof Error ? error.message : tr("Excel faylni o‘qib bo‘lmadi", "Не удалось прочитать файл Excel"));
     } finally {
       setParsingExcel(false);
     }
@@ -1315,7 +1317,7 @@ export function PurchasesPage() {
               loading={save.isPending}
               disabled={!canSave}
               onClick={() => {
-                if (editingDocument && !window.confirm("Kirimdagi o'zgarishlar stock va FIFO batchni qayta hisoblaydi. Davom etasizmi?")) return;
+                if (editingDocument && !window.confirm(tr("Kirimdagi o'zgarishlar stock va FIFO batchni qayta hisoblaydi. Davom etasizmi?", "Изменения в приходе пересчитают остаток и партию FIFO. Продолжить?"))) return;
                 save.mutate();
               }}
             >

@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-11-01 - Sayt faqat ruscha, UZ/RU tugmasi olib tashlandi
+
+- O'zgardi: yuqori o'ng burchak (va kirish sahifasi)dagi UZ/RU tugmasi yo'q; sayt hamma uchun doim ruscha. Telefonda oldin saqlangan "UZ" tanlovi ham RU ga o'tadi (lokalda `inventory.language=uz` qo'yib tekshirildi).
+- Qanday: `I18nProvider` ga `forcedLanguage` parametri qo'shildi (`main.tsx` da `"ru"`), `LanguageSwitch` shunda `null` qaytaradi. Tugmani qaytarish uchun `main.tsx` dagi `forcedLanguage="ru"` ni olib tashlash yetarli. `DataTable` dagi "yuklanmoqda / topilmadi" yozuvlari endi tarjima qilinadi (oldin faqat o'zbekcha edi).
+- Ta'sir: `apps/web/src/contexts/I18nContext.tsx`, `main.tsx`, `components/ui.tsx`. API, baza o'zgarmadi. Excel eksport tili ham ruscha bo'ladi (`locale: language`).
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56; testlar o'zbekcha yozuvlarni tekshiradi, shuning uchun majburlash faqat `main.tsx` da). Lokal brauzerda Sotuv va kirish sahifalari ruscha, tugma yo'q.
+- Qolgan o'zbekcha matnlar ruschaga o'tkazildi (taxminan 100 ta joy): muvaffaqiyat xabarlari, o'chirish/arxiv tasdiqlash oynalari (`ConfirmDialog` tugmalari ham), Excel import xatolari, kirish/ro'yxatdan o'tish forma xatolari, API ulanish xatosi, "Yuklanmoqda/topilmadi". Tashqi (React'dan tashqari) kod uchun `trStatic()` qo'shildi; forma tekshiruv xabarlari (zod) til o'zgarsa ham to'g'ri chiqishi uchun `error: () => ...` ko'rinishida.
+- **Atayin o'zgartirilmadi:** Excel import ustun nomlari (`mahsulot nomi`, `kirim narxi`, ...): ular foydalanuvchi fayllaridagi ustunlarni topish uchun kerak. Ishlatilmaydigan `lib/format.ts` (`paymentLabels`, `debtLabels`) tegilmadi.
+- **Ma'lum cheklov:** serverda yaratiladigan matnlar (PDF chek/nakladnoy, Excel hisobotlari, API xato xabarlari) tilga bog'liq tarjima qilinmagan, avvalgidek qoladi. Haqiqiy tasdiqlash oynalarining barchasi qo'lda ko'rib chiqilmagan (faqat kirish xatosi va sahifalar tekshirildi).
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Telefonda Mahsulotlar (va boshqa jadval) kartalari ekrandan chiqib ketishi
 
 - O'zgardi: telefon kengligida (<=620px) jadvallar "karta" ko'rinishida ko'rsatilganda `table` blok sifatida kengligi 100% bilan chiqadi; uzun nom/joy so'zi o'ralib tushadi.

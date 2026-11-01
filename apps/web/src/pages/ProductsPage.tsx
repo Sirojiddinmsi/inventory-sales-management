@@ -36,7 +36,7 @@ import {
   Textarea
 } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
-import { useI18n } from "../contexts/I18nContext";
+import { trStatic, useI18n } from "../contexts/I18nContext";
 import { ProductDetailsModal } from "../components/ProductDetailsModal";
 import { ApiError, api, download, downloadPost } from "../lib/api";
 import { dateTime, money, number, toIsoEndOfDay, toIsoFromDateInput } from "../lib/format";
@@ -403,7 +403,7 @@ export function ProductsPage() {
       });
     },
     onSuccess: async () => {
-      toast.success(editing ? "Mahsulot yangilandi" : "Mahsulot qo‘shildi");
+      toast.success(editing ? tr("Mahsulot yangilandi", "Товар обновлён") : tr("Mahsulot qo‘shildi", "Товар добавлен"));
       setModalOpen(false);
       setUpdateRemainingCostOnSave(false);
       setEditCostCorrectionNote("");
@@ -491,7 +491,7 @@ export function ProductsPage() {
   const remove = useMutation({
     mutationFn: (id: string) => api<void>(`/products/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Mahsulot butunlay o‘chirildi");
+      toast.success(tr("Mahsulot butunlay o‘chirildi", "Товар удалён навсегда"));
       setDeleting(null);
       void queryClient.invalidateQueries({ queryKey: ["products"] });
     },
@@ -505,7 +505,7 @@ export function ProductsPage() {
         body: JSON.stringify({ ids: selectedProductIds })
       }),
     onSuccess: (result) => {
-      toast.success(`${result.deleted} ta mahsulot butunlay o'chirildi`);
+      toast.success(tr(`${result.deleted} ta mahsulot butunlay o'chirildi`, `Товаров удалено навсегда: ${result.deleted}`));
       setBulkDeleteOpen(false);
       setSelectedProductIds([]);
       void queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -525,7 +525,7 @@ export function ProductsPage() {
         })
       }),
     onSuccess: (result) => {
-      toast.success(`${result.updated} ta mahsulot joylashuvi yangilandi`);
+      toast.success(tr(`${result.updated} ta mahsulot joylashuvi yangilandi`, `Место обновлено у товаров: ${result.updated}`));
       setBulkMoveOpen(false);
       setBulkLocation("");
       setSelectedProductIds([]);
@@ -544,7 +544,7 @@ export function ProductsPage() {
         })
       }),
     onSuccess: (result) => {
-      toast.success(`${result.updated} ta mahsulot kategoriyasi yangilandi`);
+      toast.success(tr(`${result.updated} ta mahsulot kategoriyasi yangilandi`, `Категория обновлена у товаров: ${result.updated}`));
       setBulkCategoryOpen(false);
       setBulkCategoryId("");
       setSelectedProductIds([]);
@@ -599,9 +599,10 @@ export function ProductsPage() {
         })
       }),
     onSuccess: (result) => {
-      toast.success(
-        `${result.created} ta yangi, ${result.updated} ta yangilandi. Stock: +${number(result.importedQuantity)}`
-      );
+      toast.success(tr(
+        `${result.created} ta yangi, ${result.updated} ta yangilandi. Stock: +${number(result.importedQuantity)}`,
+        `Новых: ${result.created}, обновлено: ${result.updated}. Остаток: +${number(result.importedQuantity)}`
+      ));
       setImportOpen(false);
       setImportRows([]);
       setImportFileName("");
@@ -735,7 +736,7 @@ export function ProductsPage() {
       const availableUnits =
         units.data ?? (await units.refetch()).data ?? [];
       const sheet = await readSheet(file);
-      if (sheet.length < 2) throw new Error("Excel faylda ma’lumot qatorlari yo‘q");
+      if (sheet.length < 2) throw new Error(tr("Excel faylda ma’lumot qatorlari yo‘q", "В файле Excel нет строк с данными"));
 
       const headers = sheet[0]!.map(normalizeHeader);
       const columnIndex = Object.fromEntries(
@@ -747,7 +748,7 @@ export function ProductsPage() {
 
       for (const required of ["name", "category", "purchasePrice", "quantity"] as const) {
         if (columnIndex[required] < 0) {
-          throw new Error(`Majburiy ustun topilmadi: ${headerAliases[required][0]}`);
+          throw new Error(`${trStatic("Majburiy ustun topilmadi: ", "Не найден обязательный столбец: ")}${headerAliases[required][0]}`);
         }
       }
 
@@ -856,8 +857,8 @@ export function ProductsPage() {
         }];
       });
 
-      if (parsed.length === 0) throw new Error("Import qilinadigan mahsulot topilmadi");
-      if (parsed.length > 2000) throw new Error("Bir faylda maksimum 2000 ta mahsulot mumkin");
+      if (parsed.length === 0) throw new Error(tr("Import qilinadigan mahsulot topilmadi", "Нет товаров для импорта"));
+      if (parsed.length > 2000) throw new Error(tr("Bir faylda maksimum 2000 ta mahsulot mumkin", "В одном файле можно импортировать не более 2000 товаров"));
       const firstNameRows = new Map<string, number>();
       const firstCodeRows = new Map<string, number>();
       const validated = parsed.map((row) => {
@@ -901,7 +902,7 @@ export function ProductsPage() {
       });
       setImportRows(validated);
     } catch (error) {
-      setImportError(error instanceof Error ? error.message : "Excel faylni o‘qib bo‘lmadi");
+      setImportError(error instanceof Error ? error.message : tr("Excel faylni o‘qib bo‘lmadi", "Не удалось прочитать файл Excel"));
     } finally {
       setParsingExcel(false);
     }
@@ -911,7 +912,7 @@ export function ProductsPage() {
     try {
       await download("/products/import-template.xlsx", "mahsulot-import-shablon.xlsx");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Shablonni yuklab bo‘lmadi");
+      toast.error(error instanceof Error ? error.message : tr("Shablonni yuklab bo‘lmadi", "Не удалось скачать шаблон"));
     }
   };
   const exportHistory = async () => {
@@ -927,7 +928,7 @@ export function ProductsPage() {
         }
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Export xatosi");
+      toast.error(error instanceof Error ? error.message : tr("Export xatosi", "Ошибка экспорта"));
     }
   };
   const exportSelected = async () => {
@@ -938,7 +939,7 @@ export function ProductsPage() {
         { ids: selectedProductIds }
       );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Export xatosi");
+      toast.error(error instanceof Error ? error.message : tr("Export xatosi", "Ошибка экспорта"));
     }
   };
   const exportInventory = async () => {
@@ -961,7 +962,7 @@ export function ProductsPage() {
         locale: language
       });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Export xatosi");
+      toast.error(error instanceof Error ? error.message : tr("Export xatosi", "Ошибка экспорта"));
     }
   };
   const toggleProductSelection = (productId: string, checked: boolean) => {
@@ -1167,7 +1168,7 @@ export function ProductsPage() {
                         <button
                           className="icon-button danger-icon"
                           onClick={() => setDeleting(product)}
-                          title="O‘chirish"
+                          title={tr("O‘chirish", "Удалить")}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -1503,8 +1504,11 @@ export function ProductsPage() {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Mahsulotni butunlay o‘chirish"
-        message={`“${deleting?.name ?? ""}” mahsuloti va uning kirim tarixi butunlay o‘chiriladi. Agar mahsulot sotilgan bo‘lsa, avval bog‘liq sotuv nakladnoylarini butunlay o‘chirish kerak.`}
+        title={tr("Mahsulotni butunlay o‘chirish", "Удалить товар навсегда")}
+        message={tr(
+          `“${deleting?.name ?? ""}” mahsuloti va uning kirim tarixi butunlay o‘chiriladi. Agar mahsulot sotilgan bo‘lsa, avval bog‘liq sotuv nakladnoylarini butunlay o‘chirish kerak.`,
+          `Товар «${deleting?.name ?? ""}» и его история прихода будут удалены навсегда. Если товар продавался, сначала нужно навсегда удалить связанные накладные продаж.`
+        )}
         loading={remove.isPending}
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove.mutate(deleting.id)}

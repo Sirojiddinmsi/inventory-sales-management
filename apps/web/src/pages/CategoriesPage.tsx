@@ -43,7 +43,7 @@ export function CategoriesPage() {
       body: JSON.stringify({ name, description: description || null })
     }),
     onSuccess: () => {
-      toast.success(editing ? "Kategoriya yangilandi" : "Kategoriya qo‘shildi");
+      toast.success(editing ? tr("Kategoriya yangilandi", "Категория обновлена") : tr("Kategoriya qo‘shildi", "Категория добавлена"));
       setModalOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
@@ -53,7 +53,7 @@ export function CategoriesPage() {
   const remove = useMutation({
     mutationFn: (id: string) => api<void>(`/categories/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Kategoriya o‘chirildi");
+      toast.success(tr("Kategoriya o‘chirildi", "Категория удалена"));
       setDeleting(null);
       void queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
@@ -153,8 +153,11 @@ export function CategoriesPage() {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Kategoriyani o‘chirish"
-        message={`“${deleting?.name ?? ""}” kategoriyasi o‘chiriladi. Agar unga mahsulotlar biriktirilgan bo‘lsa, server operatsiyani rad etadi.`}
+        title={tr("Kategoriyani o‘chirish", "Удалить категорию")}
+        message={tr(
+          `“${deleting?.name ?? ""}” kategoriyasi o‘chiriladi. Agar unga mahsulotlar biriktirilgan bo‘lsa, server operatsiyani rad etadi.`,
+          `Категория «${deleting?.name ?? ""}» будет удалена. Если к ней привязаны товары, сервер отклонит операцию.`
+        )}
         loading={remove.isPending}
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove.mutate(deleting.id)}

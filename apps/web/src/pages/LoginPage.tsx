@@ -7,12 +7,12 @@ import { Link, Navigate } from "react-router-dom";
 import { z } from "zod";
 import { Button } from "../components/ui";
 import { useAuth } from "../contexts/AuthContext";
-import { LanguageSwitch, useI18n } from "../contexts/I18nContext";
+import { LanguageSwitch, trStatic, useI18n } from "../contexts/I18nContext";
 import { api } from "../lib/api";
 
 const schema = z.object({
-  email: z.email("Email manzil noto'g'ri"),
-  password: z.string().min(8, "Parol kamida 8 ta belgidan iborat bo'lsin")
+  email: z.email({ error: () => trStatic("Email manzil noto'g'ri", "Неверный адрес email") }),
+  password: z.string().min(8, { error: () => trStatic("Parol kamida 8 ta belgidan iborat bo'lsin", "Пароль должен содержать не менее 8 символов") })
 });
 
 type LoginForm = z.infer<typeof schema>;

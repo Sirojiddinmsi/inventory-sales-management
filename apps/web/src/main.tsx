@@ -13,7 +13,8 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <I18nProvider>
+        {/* The site is Russian-only for now. Remove forcedLanguage to bring back the UZ/RU switcher. */}
+        <I18nProvider forcedLanguage="ru">
           <AuthProvider>
             <App />
             <Toaster

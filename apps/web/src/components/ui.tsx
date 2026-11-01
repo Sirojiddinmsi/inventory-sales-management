@@ -16,6 +16,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes
 } from "react";
+import { useI18n } from "../contexts/I18nContext";
 
 export function Button({
   variant = "primary",
@@ -244,11 +245,12 @@ export function DataTable({
   empty?: boolean;
   minWidth?: number;
 }) {
+  const { tr } = useI18n();
   if (loading) {
     return (
       <div className="table-state">
         <LoaderCircle className="spin" />
-        <span>Ma’lumotlar yuklanmoqda...</span>
+        <span>{tr("Ma’lumotlar yuklanmoqda...", "Загрузка данных...")}</span>
       </div>
     );
   }
@@ -256,7 +258,7 @@ export function DataTable({
     return (
       <div className="table-state">
         <AlertTriangle />
-        <span>Ma’lumot topilmadi</span>
+        <span>{tr("Ma’lumot topilmadi", "Данные не найдены")}</span>
       </div>
     );
   }
@@ -341,6 +343,7 @@ export function ConfirmDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { tr } = useI18n();
   return (
     <Modal
       open={open}
@@ -348,8 +351,8 @@ export function ConfirmDialog({
       onClose={onCancel}
       footer={
         <>
-          <Button variant="secondary" onClick={onCancel}>Bekor qilish</Button>
-          <Button variant="danger" loading={loading} onClick={onConfirm}>O‘chirish</Button>
+          <Button variant="secondary" onClick={onCancel}>{tr("Bekor qilish", "Отмена")}</Button>
+          <Button variant="danger" loading={loading} onClick={onConfirm}>{tr("O‘chirish", "Удалить")}</Button>
         </>
       }
     >

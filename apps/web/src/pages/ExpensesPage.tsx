@@ -67,7 +67,7 @@ export function ExpensesPage() {
       })
     }),
     onSuccess: () => {
-      toast.success(editing ? "Xarajat yangilandi" : "Xarajat qo‘shildi");
+      toast.success(editing ? tr("Xarajat yangilandi", "Расход обновлён") : tr("Xarajat qo‘shildi", "Расход добавлен"));
       setModalOpen(false);
       void queryClient.invalidateQueries({ queryKey: ["expenses"] });
       void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
@@ -78,7 +78,7 @@ export function ExpensesPage() {
   const remove = useMutation({
     mutationFn: (id: string) => api<void>(`/expenses/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast.success("Xarajat o‘chirildi");
+      toast.success(tr("Xarajat o‘chirildi", "Расход удалён"));
       setDeleting(null);
       void queryClient.invalidateQueries({ queryKey: ["expenses"] });
     },
@@ -172,8 +172,11 @@ export function ExpensesPage() {
 
       <ConfirmDialog
         open={Boolean(deleting)}
-        title="Xarajatni o‘chirish"
-        message={`${deleting?.expense_type ?? ""} xarajati (${money(deleting?.amount)}) o‘chiriladi.`}
+        title={tr("Xarajatni o‘chirish", "Удалить расход")}
+        message={tr(
+          `${deleting?.expense_type ?? ""} xarajati (${money(deleting?.amount)}) o‘chiriladi.`,
+          `Расход «${deleting?.expense_type ?? ""}» (${money(deleting?.amount)}) будет удалён.`
+        )}
         loading={remove.isPending}
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove.mutate(deleting.id)}
