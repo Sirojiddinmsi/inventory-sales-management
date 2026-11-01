@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-01 - Sotuv qatoridagi pensil (tahrirlash) tugmasi olib tashlandi
+
+- O'zgardi: Sotuvlar ro'yxatida qatordagi pensil tugmasi yo'q. Tahrirlash nakladnoy raqamini bosganda ochiladigan oynadagi "Редактировать" tugmasi orqali qoladi.
+- Sabab: egasi so'rovi — nakladnoyni bosganda tahrirlash baribir ichida bor.
+- Ta'sir: faqat `SalesPage.tsx` (tugma va ishlatilmay qolgan `Edit3` importi). Qator tugmalari endi: PDF nakladnoy, qaytarish, arxiv (admin). Arxivdagi sotuvlar uchun o'zgarish yo'q.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda qator tugmalari "PDF / Возврат / В архив", nakladnoy oynasida "Редактировать" bor.
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Mahsulot qatoridagi pensil (tahrirlash) tugmasi olib tashlandi
 
 - O'zgardi: Mahsulotlar ro'yxatida qatordagi pensil tugmasi yo'q. Tahrirlash mahsulot nomini bosganda ochiladigan oynadagi "Редактировать" tugmasi orqali qoladi.

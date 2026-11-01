@@ -3,7 +3,6 @@ import {
   Archive,
   Search,
   Download,
-  Edit3,
   Pencil,
   Plus,
   ReceiptText,
@@ -951,9 +950,6 @@ export function SalesPage() {
                       <>
                         <button className="icon-button" title={tr("PDF nakladnoy", "PDF накладная")} onClick={() => void receipt(sale)}>
                           <Download size={16} />
-                        </button>
-                        <button className="icon-button" title={tr("Tahrirlash", "Редактировать")} onClick={() => void openEdit(sale)}>
-                          <Edit3 size={16} />
                         </button>
                         <button className="icon-button" title={tr("Mahsulot qaytarish", "Возврат товара")} onClick={() => void openReturn(sale)}>
                           <RotateCcw size={16} />
