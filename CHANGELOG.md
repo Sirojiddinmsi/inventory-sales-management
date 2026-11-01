@@ -10,7 +10,8 @@
 - **Atayin o'zgartirilmadi:** Excel import ustun nomlari (`mahsulot nomi`, `kirim narxi`, ...): ular foydalanuvchi fayllaridagi ustunlarni topish uchun kerak. Ishlatilmaydigan `lib/format.ts` (`paymentLabels`, `debtLabels`) tegilmadi.
 - **Ma'lum cheklov:** serverda yaratiladigan matnlar (PDF chek/nakladnoy, Excel hisobotlari, API xato xabarlari) tilga bog'liq tarjima qilinmagan, avvalgidek qoladi. Haqiqiy tasdiqlash oynalarining barchasi qo'lda ko'rib chiqilmagan (faqat kirish xatosi va sahifalar tekshirildi).
 - Migration/config: yo'q.
-- Rollback: shu commitni revert qilish.
+- **Production'ga chiqarildi: 2026-11-01 13:55 UTC**, `main` = `0eaf59f`. Faqat `web` image (`tikuv-market-web:russian-only-0eaf59f`); `api`, `db` tegilmadi. 13 ta fayl (serverdagi nusxalari oldingi `main` bilan mazmunan bir xilligi tekshirilgan, keyin yangilari bitta paketda qo'yilgan). Backup: `inventory_sales-20261101T135405Z.dump` (tekshirilgan). Sayt 200, `/health` ok.
+- Rollback: `docker tag tikuv-market-web:rollback-russian-only-20261101T135405Z tikuv-market-web:latest && docker compose -f docker-compose.prod.yml up -d --no-deps web`; eski fayllar `/var/backups/tikuv-market/releases/russian-only-before-20261101T135405Z/old-files.tar`.
 
 ## 2026-11-01 - Telefonda Mahsulotlar (va boshqa jadval) kartalari ekrandan chiqib ketishi
 
