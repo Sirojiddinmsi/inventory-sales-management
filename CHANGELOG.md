@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-11-01 - Prixod ro'yxatida bitta "yuklash" tugmasi: PDF yoki Excel so'raydi
+
+- O'zgardi: Prixod hujjatlari qatorida alohida Excel tugmasi olib tashlandi. "Скачать" (yuklash) tugmasi bosilganda "в каком формате скачать?" oynasi ochiladi: **PDF** yoki **Excel** (yoki Отмена). Tanlangach fayl yuklanadi va oyna yopiladi.
+- Sabab: egasi so'rovi — Excel tugmasi bosilishi bilan darhol yuklanib ketardi; yuklashda format so'ralsin.
+- Ta'sir: `PurchasesPage.tsx` (qator tugmasi, yangi `Modal`, yangi state `downloadChoiceDocument`), `styles.css` (`.download-format-options`). Yuklash funksiyasi (`exportPurchaseDocument`) o'zgarmadi. Qator tugmalari endi: tahrirlash, yuklash, tafsilot. Tafsilot oynasidagi PDF/Excel tugmalari o'zgarmadi.
+- Testlar: typecheck o'tdi; testlar o'tdi (API 62, web 56); lokal brauzerda: qator tugmalari "Редактировать документ / Скачать / Посмотреть детали"; oyna PDF/Excel/Отмена beradi; Excel bosilganda `GET /purchases/documents/:id/export.xlsx` 200 va "Excel скачан"; telefon kengligida (375 px) oyna to'g'ri ko'rinadi, sahifa kengligi 375. PDF tugmasi alohida bosib sinalmadi (kod yo'li Excel bilan bir xil, format parametri `pdf`).
+- Migration/config: yo'q.
+- Rollback: shu commitni revert qilish.
+
 ## 2026-11-01 - Sotuv qatoridagi pensil (tahrirlash) tugmasi olib tashlandi
 
 - O'zgardi: Sotuvlar ro'yxatida qatordagi pensil tugmasi yo'q. Tahrirlash nakladnoy raqamini bosganda ochiladigan oynadagi "Редактировать" tugmasi orqali qoladi.
